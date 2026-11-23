@@ -1,7 +1,7 @@
 """Build the Thai economy dashboard PDF (+ PNG previews for GitHub).
 
 Usage:
-    python src/dashboard.py            # real data if BOT_API_TOKEN is set, else sample
+    python src/dashboard.py            # real BOT data; needs BOT_API_TOKEN, fails without it
     python src/dashboard.py --sample   # always use sample data
 """
 from __future__ import annotations
@@ -31,23 +31,31 @@ DISCLAIMER = ("For educational purposes only. Not for commercial use. Not invest
               "Data: Bank of Thailand API (bot.or.th).")
 PAGE = (11.69, 8.27)  # A4 landscape
 L, R = 0.045, 0.955   # page margins
+MAX_STALE_DAYS = 7    # long enough to cover Thai public holidays
 
 
 # ----------------------------------------------------------------- data
 def load(sample: bool, years: int = 3):
     end = date.today()
     start = end - timedelta(days=365 * years)
-    if not sample:
-        try:
-            fx = bot_api.exchange_rate(max(start, end - timedelta(days=365)), end)
-            infl = bot_api.inflation(start, end)
-            pr = bot_api.policy_rate()
-            pr = pr[pr["date"] >= pd.Timestamp(start) - pd.Timedelta(days=730)]
-            return fx, infl, pr, "Bank of Thailand API"
-        except Exception as e:  # noqa: BLE001
-            print(f"[warn] BOT API unavailable ({e}); falling back to SAMPLE data", file=sys.stderr)
-    fx, infl, pr = sample_data.make(start, end)
-    return fx, infl, pr, "SAMPLE DATA (synthetic, not official)"
+    if sample:
+        fx, infl, pr = sample_data.make(start, end)
+        return fx, infl, pr, "SAMPLE DATA (synthetic, not official)"
+    try:
+        fx = bot_api.exchange_rate(max(start, end - timedelta(days=365)), end)
+        infl = bot_api.inflation(start, end)
+        pr = bot_api.policy_rate()
+    except bot_api.BotApiError as e:
+        sys.exit(f"Could not get real data from the BOT API: {e}\n"
+                 "Nothing was written. Use --sample to build from synthetic data.")
+    pr = pr[pr["date"] >= pd.Timestamp(start) - pd.Timedelta(days=730)]
+    if fx.empty:
+        sys.exit("The BOT API returned no USD/THB rates. Nothing was written.")
+    latest = fx["date"].max().date()
+    if (end - latest).days > MAX_STALE_DAYS:
+        sys.exit(f"The newest USD/THB rate is from {latest}, more than {MAX_STALE_DAYS} days ago. "
+                 "Nothing was written.")
+    return fx, infl, pr, "Bank of Thailand API"
 
 
 # ----------------------------------------------------------- components

@@ -14,7 +14,7 @@
 
 **[👉 เปิด PDF dashboard](output/thai_econ_dashboard.pdf)** (GitHub แสดง PDF ในเบราว์เซอร์ได้เลย)
 
-> ℹ️ ไฟล์ที่อยู่ใน repo ตอนนี้สร้างจาก **ข้อมูลตัวอย่าง (SAMPLE DATA)** จะเปลี่ยนเป็นข้อมูลจริงเมื่อใส่ `BOT_API_TOKEN`
+> ℹ️ มุมขวาบนของรายงานบอกแหล่งข้อมูลเสมอ จุดสีเขียว "Bank of Thailand API" คือข้อมูลจริง จุดสีส้ม "SAMPLE DATA" คือข้อมูลตัวอย่างที่สร้างขึ้นเอง
 
 **หน้า 1: Overview**
 
@@ -50,14 +50,17 @@ python src/dashboard.py
 ```
 ไฟล์จะออกที่ `output/thai_econ_dashboard.pdf`
 
-ถ้าไม่มี token สคริปต์จะใช้ **ข้อมูลตัวอย่าง (synthetic)** และประทับคำว่า `SAMPLE DATA` บนรายงาน
-ข้อมูลตัวอย่างนี้ **ไม่ใช่ตัวเลขจริงของ ธปท.** (บังคับใช้ได้ด้วย `python src/dashboard.py --sample`)
+ถ้าไม่มี token, API ตอบ error หรือค่าเงินบาทล่าสุดเก่ากว่า 7 วัน สคริปต์จะหยุดพร้อมบอกสาเหตุ และไม่เขียนไฟล์ใดเลย
+
+ถ้าอยากลองโดยไม่มี token ให้รัน `python src/dashboard.py --sample` รายงานจะใช้ **ข้อมูลตัวอย่าง (synthetic)** และประทับคำว่า `SAMPLE DATA` ข้อมูลนี้ **ไม่ใช่ตัวเลขจริงของ ธปท.** อย่า commit ผลที่ได้
 
 ถ้า ธปท. เปลี่ยน path ของ API ให้แก้ผ่าน env ได้: `BOT_EXG_PATH`, `BOT_POLICY_PATH`, `BOT_OBS_PATH`, `BOT_CPI_SERIES`
 
 ## 🔄 อัปเดตอัตโนมัติด้วย GitHub Actions
 Workflow ใน `.github/workflows/update.yml` จะสร้าง PDF ใหม่ทุกวันจันทร์แล้ว commit กลับเข้า repo
 ให้เพิ่ม secret ชื่อ `BOT_API_TOKEN` ที่ **Settings → Secrets and variables → Actions**
+
+ถ้าดึงข้อมูลจริงไม่ได้ workflow จะขึ้นสีแดงและไม่ commit อะไร ไฟล์เดิมใน repo จึงไม่ถูกเขียนทับ
 
 ## 🗂️ โครงสร้าง
 ```
