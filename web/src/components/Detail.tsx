@@ -64,7 +64,7 @@ export function Detail({ data, series: s, lang, t, range, onRange, onBack, langB
         <div><dt>{t.low}</dt><dd>{formatValue(s, Math.min(...values))}</dd></div>
       </dl>
       <p className="footnote">
-        {t.asOf} {formatDate(lastPoint[0], lang)} · {data.source === 'sample' ? t.sampleSource : t.source}
+        {t.asOf} {formatDate(lastPoint[0], lang)} · {data.source === 'sample' ? t.sampleSource : `${t.sourceLabel} ${s.source[lang]}`}
       </p>
     </main>
   )

@@ -11,6 +11,7 @@ export interface Series {
   unit: string
   decimals: number
   frequency: Frequency
+  source: Text
   points: Point[]
 }
 
@@ -21,7 +22,7 @@ export interface Group {
 
 export interface Dashboard {
   generated: string
-  source: 'bot' | 'sample'
+  source: 'live' | 'sample'
   groups: Group[]
   series: Series[]
 }
@@ -78,14 +79,14 @@ function series(x: unknown, at: string, groupIds: Set<string>): Series {
   }
   return {
     id: str(o, 'id', at), group, name: text(o, 'name', at), sub: text(o, 'sub', at),
-    unit: str(o, 'unit', at), decimals, frequency: frequency as Frequency, points,
+    unit: str(o, 'unit', at), decimals, frequency: frequency as Frequency, source: text(o, 'source', at), points,
   }
 }
 
 export function parseDashboard(x: unknown): Dashboard {
   const o = obj(x, 'data')
   const source = str(o, 'source', 'data')
-  if (source !== 'bot' && source !== 'sample') throw new DataError(`data.source "${source}" is unknown`)
+  if (source !== 'live' && source !== 'sample') throw new DataError(`data.source "${source}" is unknown`)
   const groups = list(o, 'groups', 'data').map((g, i) => {
     const at = `data.groups[${i}]`
     const go = obj(g, at)

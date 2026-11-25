@@ -3,7 +3,7 @@ import type { Point, Series } from './data'
 import { DataError, parseDashboard } from './data'
 import { direction, formatChange, geometry, latestChange, windowed } from './derive'
 
-const base = { group: 'fx', name: { th: 'ก', en: 'A' }, sub: { th: 'ข', en: 'B' }, decimals: 2 }
+const base = { group: 'fx', name: { th: 'ก', en: 'A' }, sub: { th: 'ข', en: 'B' }, source: { th: 'ค', en: 'C' }, decimals: 2 }
 const mk = (over: Partial<Series> & { points: Point[] }): Series =>
   ({ id: 'x', unit: '', frequency: 'daily', ...base, ...over }) as Series
 
@@ -56,7 +56,7 @@ describe('geometry', () => {
 
 describe('parseDashboard', () => {
   const good = {
-    generated: '2026-11-25T18:00:00+07:00', source: 'bot',
+    generated: '2026-11-25T18:00:00+07:00', source: 'live',
     groups: [{ id: 'fx', name: { th: 'ค่าเงิน', en: 'FX' } }],
     series: [{ id: 'usd_thb', ...base, unit: '', frequency: 'daily', points: [['2026-11-24', 32.7], ['2026-11-25', 32.74]] }],
   }
@@ -75,5 +75,16 @@ describe('parseDashboard', () => {
     const bad = structuredClone(good)
     bad.series[0]!.points.reverse()
     expect(() => parseDashboard(bad)).toThrow(/is not after the point before it/)
+  })
+})
+
+describe('parseDashboard source', () => {
+  it('requires each series to say where its data came from', () => {
+    const bad = {
+      generated: '2026-11-25T18:00:00+07:00', source: 'live',
+      groups: [{ id: 'fx', name: { th: 'ค่าเงิน', en: 'FX' } }],
+      series: [{ id: 'usd_thb', group: 'fx', name: { th: 'ก', en: 'A' }, sub: { th: 'ข', en: 'B' }, decimals: 2, unit: '', frequency: 'daily', points: [['2026-11-24', 1], ['2026-11-25', 2]] }],
+    }
+    expect(() => parseDashboard(bad)).toThrow(new DataError('data.series[0].source is not an object'))
   })
 })
