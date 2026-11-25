@@ -10,6 +10,8 @@
 
 ดึงข้อมูลเศรษฐกิจไทยจากแหล่งฟรีที่ไม่ต้องใช้ key ด้วย Python แล้วเขียนเป็นไฟล์ JSON ไฟล์เดียว ให้หน้าเว็บนำไปแสดง
 
+หน้าเว็บเขียนด้วย React + TypeScript หน้าตาแบบแอป iOS เน้นการเปิดบนมือถือ มีภาษาไทยและอังกฤษ และเปลี่ยนเป็น dark mode ตามเครื่อง GitHub Actions สร้างข้อมูลและเผยแพร่บน GitHub Pages ทุกวัน
+
 ## ข้อมูลที่ดึง
 
 ตัวชี้วัดทั้งหมดอยู่ใน `src/series.py` ไฟล์เดียว ตัวละหนึ่งรายการ
@@ -40,9 +42,32 @@ pytest -q tests
 
 ถ้าแหล่งใดตอบ error หรือข้อมูลล่าสุดเก่ากว่าที่กำหนดในตารางข้างบน สคริปต์จะหยุดพร้อมบอกสาเหตุ และไม่เขียนไฟล์ ข้อมูลตัวอย่าง **ไม่ใช่ตัวเลขจริงของ ธปท.** และไฟล์จะมี `"source": "sample"` กำกับไว้
 
+## หน้าเว็บ
+
+```bash
+python src/build_data.py --sample   # สร้าง web/public/data/dashboard.json
+cd web
+npm install
+npm run dev     # เปิด http://localhost:5173
+npm test        # vitest
+npm run build   # typecheck แล้ว build ลง web/dist
+```
+
+| ไฟล์ | หน้าที่ |
+|---|---|
+| `web/src/data.ts` | type ของ `dashboard.json` และตัวตรวจรูปแบบตอนโหลด |
+| `web/src/derive.ts` | คำนวณค่าล่าสุด การเปลี่ยนแปลง ช่วงเวลา และพิกัดกราฟ |
+| `web/src/components/Overview.tsx` | หน้ารวม แบ่งหมวดพร้อมกราฟเล็ก |
+| `web/src/components/Detail.tsx` | หน้ารายละเอียด กราฟใหญ่ เลือก 6M / 1Y / 3Y |
+| `web/src/i18n.ts` | ข้อความภาษาไทยและอังกฤษ |
+
+หน้ารายละเอียดใช้ hash ใน URL เช่น `#usd_thb` จึงกดปุ่มย้อนกลับของเบราว์เซอร์และแชร์ลิงก์ได้
+
 ## GitHub Actions
 
-`.github/workflows/update.yml` รัน test ทุก push และ pull request แล้วดึงข้อมูลจริงทุกวันเวลา 18:00 น. ตามเวลาไทย
+`.github/workflows/update.yml` รัน test ของ Python และหน้าเว็บทุก push และ pull request ทุกวันเวลาประมาณ 18:00 น. ตามเวลาไทย (GitHub มักเริ่มช้ากว่านั้น) จะดึงข้อมูลจริง build หน้าเว็บ แล้วเผยแพร่ขึ้น GitHub Pages
+
+ต้องเปิด GitHub Pages ก่อนครั้งแรก ที่ **Settings → Pages → Source** ให้เลือก **GitHub Actions**
 
 ตอนนี้ไม่ต้องใช้ secret ใดๆ เมื่อย้ายไปใช้ BOT API จะต้องเพิ่ม secret `BOT_API_TOKEN` ที่ **Settings → Secrets and variables → Actions → Repository secrets**
 
@@ -55,6 +80,7 @@ src/bot_api.py      # client เรียก BOT API สำหรับตอน
 src/sample_data.py  # ข้อมูลตัวอย่างสำหรับรันแบบออฟไลน์
 src/build_data.py   # ดึงทุกตัวชี้วัด ตรวจความสด แล้วเขียน JSON
 tests/              # pytest
+web/                # หน้าเว็บ React + TypeScript (Vite)
 ```
 
 ## License
