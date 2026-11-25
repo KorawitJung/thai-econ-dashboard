@@ -1,27 +1,30 @@
-"""Offline SAMPLE data so the dashboard renders without an API token.
+"""Offline SAMPLE data so the dashboard builds without an API token.
 
 These numbers are SYNTHETIC and only shaped to look plausible. They are NOT
-official Bank of Thailand statistics. The PDF is stamped "SAMPLE DATA" when
-they are used.
+official Bank of Thailand statistics. The dashboard labels them as sample data.
 """
+from __future__ import annotations
+
+import zlib
 from datetime import date
 
 import numpy as np
 import pandas as pd
 
+from series import Series
 
-def make(start: date, end: date):
-    rng = np.random.default_rng(42)
-    days = pd.bdate_range(start, end)
-    walk = np.cumsum(rng.normal(0, 0.12, len(days)))
-    fx = pd.DataFrame({"date": days, "usd_thb": 34.5 + walk - walk.mean()})
+SHAPES = {
+    "daily": {"usd_thb": (32.74, 0.12)},
+    "monthly": {"cpi_yoy": (0.77, 0.25)},
+}
 
-    months = pd.date_range(start, end, freq="MS")
-    cpi = 0.8 + np.cumsum(rng.normal(0, 0.25, len(months)))
-    infl = pd.DataFrame({"date": months, "cpi_yoy": np.clip(cpi, -1.5, 4.0)})
 
-    pr = pd.DataFrame({
-        "date": pd.to_datetime([start, start + (end - start) / 3, start + 2 * (end - start) / 3]),
-        "policy_rate": [2.50, 2.25, 2.00],
-    })
-    return fx, infl, pr
+def make(series: Series, start: date, end: date) -> pd.DataFrame:
+    if series.frequency == "event":
+        dates = pd.to_datetime([start, start + (end - start) / 3, start + 2 * (end - start) / 3])
+        return pd.DataFrame({"date": dates, "value": [2.50, 2.25, 2.00]})
+    rng = np.random.default_rng(zlib.crc32(series.id.encode()))
+    last, step = SHAPES[series.frequency][series.id]
+    dates = pd.bdate_range(start, end) if series.frequency == "daily" else pd.date_range(start, end, freq="MS")
+    walk = np.cumsum(rng.normal(0, step, len(dates)))
+    return pd.DataFrame({"date": dates, "value": walk - walk[-1] + last})

@@ -45,11 +45,11 @@ def exchange_rate(start: date, end: date, currency: str = "USD") -> pd.DataFrame
     df = df[df["mid_rate"].astype(str).str.strip() != ""]
     return pd.DataFrame({
         "date": pd.to_datetime(df["period"]),
-        "usd_thb": pd.to_numeric(df["mid_rate"], errors="coerce"),
+        "value": pd.to_numeric(df["mid_rate"], errors="coerce"),
     }).dropna().sort_values("date")
 
 
-def policy_rate() -> pd.DataFrame:
+def policy_rate(start: date, end: date) -> pd.DataFrame:
     js = _get(POLICY_PATH, {})
     rows = js["result"]["data"] if isinstance(js["result"]["data"], list) else js["result"]["data"]["data_detail"]
     df = pd.DataFrame(rows)
@@ -57,7 +57,7 @@ def policy_rate() -> pd.DataFrame:
     val_col = next(c for c in df.columns if "rate" in c.lower() or "value" in c.lower())
     return pd.DataFrame({
         "date": pd.to_datetime(df[date_col]),
-        "policy_rate": pd.to_numeric(df[val_col], errors="coerce"),
+        "value": pd.to_numeric(df[val_col], errors="coerce"),
     }).dropna().sort_values("date")
 
 
@@ -67,5 +67,5 @@ def inflation(start: date, end: date) -> pd.DataFrame:
     df = pd.DataFrame(obs)
     return pd.DataFrame({
         "date": pd.to_datetime(df["period_start"]),
-        "cpi_yoy": pd.to_numeric(df["value"], errors="coerce"),
+        "value": pd.to_numeric(df["value"], errors="coerce"),
     }).dropna().sort_values("date")
