@@ -1,0 +1,57 @@
+"""Free data sources that need no API key.
+
+Frankfurter serves the European Central Bank's daily reference rates.
+The BIS Data Portal republishes the Bank of Thailand's policy rate and Thailand's CPI.
+"""
+from __future__ import annotations
+
+import io
+from datetime import date
+
+import pandas as pd
+import requests
+
+FRANKFURTER = "https://api.frankfurter.dev/v1"
+BIS = "https://stats.bis.org/api/v2/data/dataflow/BIS"
+
+
+class SourceError(RuntimeError):
+    pass
+
+
+def _get(url: str, params: dict, headers: dict | None = None) -> requests.Response:
+    try:
+        r = requests.get(url, params=params, headers=headers, timeout=60)
+    except requests.RequestException as e:
+        raise SourceError(f"{url} -> {e}") from e
+    if r.status_code != 200:
+        raise SourceError(f"{url} -> HTTP {r.status_code}: {r.text[:200]}")
+    return r
+
+
+def frankfurter_usd_thb(start: date, end: date) -> pd.DataFrame:
+    js = _get(f"{FRANKFURTER}/{start.isoformat()}..{end.isoformat()}", {"base": "USD", "symbols": "THB"}).json()
+    rates = js.get("rates") or {}
+    return pd.DataFrame({
+        "date": pd.to_datetime(list(rates)),
+        "value": [day["THB"] for day in rates.values()],
+    }).sort_values("date")
+
+
+def _bis(flow: str, key: str, start: str) -> pd.DataFrame:
+    r = _get(f"{BIS}/{flow}/1.0/{key}", {"startPeriod": start, "format": "csv"}, {"Accept": "text/csv"})
+    df = pd.read_csv(io.StringIO(r.text), usecols=["TIME_PERIOD", "OBS_VALUE"])
+    return pd.DataFrame({
+        "date": pd.to_datetime(df["TIME_PERIOD"]),
+        "value": pd.to_numeric(df["OBS_VALUE"], errors="coerce"),
+    }).dropna().sort_values("date")
+
+
+def bis_policy_rate(start: date, end: date) -> pd.DataFrame:
+    # Start two years early so the decision in force at `start` is in the data.
+    return _bis("WS_CBPOL", "D.TH", start.replace(year=start.year - 2).isoformat())
+
+
+def bis_cpi_yoy(start: date, end: date) -> pd.DataFrame:
+    # Unit 771: percentage change on the same month a year earlier.
+    return _bis("WS_LONG_CPI", "M.TH.771", start.strftime("%Y-%m"))

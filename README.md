@@ -1,4 +1,4 @@
-# 🇹🇭 Thailand Macro Dashboard: ค่าเงินบาท · เงินเฟ้อ · ดอกเบี้ยนโยบาย
+# Thailand Macro Dashboard: ค่าเงินบาท · เงินเฟ้อ · ดอกเบี้ยนโยบาย
 
 > ⚠️ **คำเตือน / Disclaimer**
 > โปรเจกต์นี้ทำขึ้น **เพื่อการศึกษาเท่านั้น** ไม่ได้ใช้ในเชิงพาณิชย์ ไม่ใช่คำแนะนำการลงทุน
@@ -8,66 +8,54 @@
 > *For educational purposes only. Not for commercial use, not investment advice, and not
 > intended to harm any person or organization. Data belongs to the Bank of Thailand.*
 
-ดึงข้อมูลจาก [BOT API Portal](https://portal.api.bot.or.th) ด้วย Python แล้วสร้าง dashboard เป็นไฟล์ **PDF** (A4)
+ดึงข้อมูลเศรษฐกิจไทยจากแหล่งฟรีที่ไม่ต้องใช้ key ด้วย Python แล้วเขียนเป็นไฟล์ JSON ไฟล์เดียว ให้หน้าเว็บนำไปแสดง
 
-## 📄 ผลลัพธ์ (Output)
+## ข้อมูลที่ดึง
 
-**[👉 เปิด PDF dashboard](output/thai_econ_dashboard.pdf)** (GitHub แสดง PDF ในเบราว์เซอร์ได้เลย)
+ตัวชี้วัดทั้งหมดอยู่ใน `src/series.py` ไฟล์เดียว ตัวละหนึ่งรายการ
 
-> ℹ️ ไฟล์ที่อยู่ใน repo ตอนนี้สร้างจาก **ข้อมูลตัวอย่าง (SAMPLE DATA)** จะเปลี่ยนเป็นข้อมูลจริงเมื่อใส่ `BOT_API_TOKEN`
+| id | ข้อมูล | แหล่ง | ความถี่ | ถือว่าเก่าเกินเมื่อ |
+|---|---|---|---|---|
+| `usd_thb` | อัตราแลกเปลี่ยน USD/THB | อัตราอ้างอิงของ ECB ผ่าน [Frankfurter](https://frankfurter.dev) | รายวัน | เกิน 7 วัน |
+| `policy_rate` | ดอกเบี้ยนโยบาย | [BIS Data Portal](https://data.bis.org) `WS_CBPOL` จากข้อมูลของ ธปท. | ตามมติ กนง. | ไม่ตรวจ |
+| `cpi_yoy` | เงินเฟ้อทั่วไป YoY | [BIS Data Portal](https://data.bis.org) `WS_LONG_CPI` | รายเดือน | เกิน 120 วัน |
 
-**หน้า 1: Overview**
+แหล่งเหล่านี้ไม่ต้องใช้ key BIS อนุญาตให้นำข้อมูลไปเผยแพร่ต่อเพื่อการที่ไม่ใช่เชิงพาณิชย์ หน้าเว็บระบุแหล่งที่มาไว้ที่ตัวชี้วัดแต่ละตัว
 
-![Dashboard overview](output/dashboard_preview.png)
+ค่าเงินและเงินเฟ้อจะย้ายไปใช้ BOT API เมื่อได้ token เพราะ BOT เป็นแหล่งต้นทางและสดกว่า `src/bot_api.py` เตรียม client ไว้แล้ว ส่วนดอกเบี้ยนโยบายจะใช้ BIS ต่อไป เพราะ BOT API รุ่นปัจจุบัน (`/PolicyRate/v3`) ให้แค่ค่าล่าสุด ไม่มีประวัติย้อนหลัง
 
-**หน้า 2: Key takeaways & data notes**
+เพิ่มตัวชี้วัดใหม่ได้โดยเพิ่ม `Series` หนึ่งรายการใน `SERIES` พร้อมฟังก์ชันดึงข้อมูลที่คืนคอลัมน์ `date` และ `value`
 
-![Dashboard insights](output/dashboard_insights.png)
+## วิธีใช้
 
-ข้อมูลดิบ (CSV): [`data/`](data/)
-
-## 📊 สิ่งที่อยู่ใน Dashboard
-| ส่วน | ข้อมูล |
-|---|---|
-| KPI | อัตราแลกเปลี่ยน USD/THB ล่าสุด, เงินเฟ้อทั่วไป (YoY), ดอกเบี้ยนโยบาย, ดอกเบี้ยแท้จริง |
-| กราฟ 1 | USD/THB รายวัน + ค่าเฉลี่ย 20 วัน |
-| กราฟ 2 | การกระจายตัวของการเปลี่ยนแปลงรายวัน (ความผันผวน) |
-| กราฟ 3 | เงินเฟ้อเทียบกรอบเป้าหมาย 1–3% และดอกเบี้ยนโยบาย |
-| กราฟ 4 | ดอกเบี้ยนโยบายแท้จริง (policy rate − CPI) |
-
-## 🚀 วิธีใช้
 ```bash
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
+python src/build_data.py --sample   # ข้อมูลตัวอย่าง ไม่ต้องมี token
+pytest -q tests
 ```
-1. สมัครและขอ token ฟรีที่ https://portal.api.bot.or.th
-2. ตั้งค่า environment variable `BOT_API_TOKEN`:
-```bash
-export BOT_API_TOKEN="your-token"      # Windows PowerShell: $env:BOT_API_TOKEN="your-token"
+
+`python src/build_data.py` ดึงข้อมูลจริงจากแหล่งข้างบน
+
+ไฟล์จะออกที่ `web/public/data/dashboard.json` เปลี่ยนที่ได้ด้วย `--out`
+
+ถ้าแหล่งใดตอบ error หรือข้อมูลล่าสุดเก่ากว่าที่กำหนดในตารางข้างบน สคริปต์จะหยุดพร้อมบอกสาเหตุ และไม่เขียนไฟล์ ข้อมูลตัวอย่าง **ไม่ใช่ตัวเลขจริงของ ธปท.** และไฟล์จะมี `"source": "sample"` กำกับไว้
+
+## GitHub Actions
+
+`.github/workflows/update.yml` รัน test ทุก push และ pull request แล้วดึงข้อมูลจริงทุกวันเวลา 18:00 น. ตามเวลาไทย
+
+ตอนนี้ไม่ต้องใช้ secret ใดๆ เมื่อย้ายไปใช้ BOT API จะต้องเพิ่ม secret `BOT_API_TOKEN` ที่ **Settings → Secrets and variables → Actions → Repository secrets**
+
+## โครงสร้าง
+
 ```
-3. รันสคริปต์:
-```bash
-python src/dashboard.py
-```
-ไฟล์จะออกที่ `output/thai_econ_dashboard.pdf`
-
-ถ้าไม่มี token สคริปต์จะใช้ **ข้อมูลตัวอย่าง (synthetic)** และประทับคำว่า `SAMPLE DATA` บนรายงาน
-ข้อมูลตัวอย่างนี้ **ไม่ใช่ตัวเลขจริงของ ธปท.** (บังคับใช้ได้ด้วย `python src/dashboard.py --sample`)
-
-ถ้า ธปท. เปลี่ยน path ของ API ให้แก้ผ่าน env ได้: `BOT_EXG_PATH`, `BOT_POLICY_PATH`, `BOT_OBS_PATH`, `BOT_CPI_SERIES`
-
-## 🔄 อัปเดตอัตโนมัติด้วย GitHub Actions
-Workflow ใน `.github/workflows/update.yml` จะสร้าง PDF ใหม่ทุกวันจันทร์แล้ว commit กลับเข้า repo
-ให้เพิ่ม secret ชื่อ `BOT_API_TOKEN` ที่ **Settings → Secrets and variables → Actions**
-
-## 🗂️ โครงสร้าง
-```
-src/bot_api.py      # client เรียก BOT API
+src/series.py       # รายการตัวชี้วัด
+src/sources.py      # Frankfurter และ BIS (ไม่ต้องใช้ key)
+src/bot_api.py      # client เรียก BOT API สำหรับตอนได้ token
 src/sample_data.py  # ข้อมูลตัวอย่างสำหรับรันแบบออฟไลน์
-src/theme.py        # design system (สี ฟอนต์ การ์ด)
-src/dashboard.py    # สร้างกราฟ + PDF 2 หน้า + PNG preview
-output/             # PDF และรูป preview
-data/               # CSV ที่ดึงมา
+src/build_data.py   # ดึงทุกตัวชี้วัด ตรวจความสด แล้วเขียน JSON
+tests/              # pytest
 ```
 
-## 📜 License
+## License
 [MIT](LICENSE). ข้อมูลเศรษฐกิจเป็นลิขสิทธิ์ของธนาคารแห่งประเทศไทย ใช้ตามเงื่อนไขของ BOT API Portal
