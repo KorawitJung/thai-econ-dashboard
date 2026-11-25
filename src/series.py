@@ -7,7 +7,7 @@ from typing import Callable, Literal
 
 import pandas as pd
 
-import bot_api
+import sources
 
 Frequency = Literal["daily", "monthly", "event"]
 Fetch = Callable[[date, date], pd.DataFrame]  # returns columns: date, value
@@ -35,6 +35,7 @@ class Series:
     decimals: int
     frequency: Frequency
     max_age_days: int | None  # None: changes only on decisions, so an old last value is normal
+    source: Text
     fetch: Fetch
 
 
@@ -46,12 +47,18 @@ GROUPS = [
 
 SERIES = [
     Series("usd_thb", "fx", Text("ดอลลาร์สหรัฐ", "US dollar"), Text("USD/THB · รายวัน", "USD/THB · daily"),
-           unit="", decimals=2, frequency="daily", max_age_days=7, fetch=bot_api.exchange_rate),
+           unit="", decimals=2, frequency="daily", max_age_days=7,
+           source=Text("อัตราอ้างอิงของธนาคารกลางยุโรป (ECB) ผ่าน Frankfurter", "European Central Bank reference rate via Frankfurter"),
+           fetch=sources.frankfurter_usd_thb),
     Series("policy_rate", "rate", Text("ดอกเบี้ยนโยบาย", "Policy rate"), Text("กนง.", "MPC"),
-           unit="%", decimals=2, frequency="event", max_age_days=None, fetch=bot_api.policy_rate),
-    # CPI for a month is published early the next month and dated to the month's first day.
+           unit="%", decimals=2, frequency="event", max_age_days=None,
+           source=Text("BIS จากข้อมูลของธนาคารแห่งประเทศไทย", "BIS, from Bank of Thailand data"),
+           fetch=sources.bis_policy_rate),
+    # BIS adds a month's CPI about two months after the month starts, so allow four months.
     Series("cpi_yoy", "infl", Text("เงินเฟ้อทั่วไป", "Headline CPI"), Text("YoY · รายเดือน", "YoY · monthly"),
-           unit="%", decimals=2, frequency="monthly", max_age_days=95, fetch=bot_api.inflation),
+           unit="%", decimals=2, frequency="monthly", max_age_days=120,
+           source=Text("BIS (Consumer prices)", "BIS (Consumer prices)"),
+           fetch=sources.bis_cpi_yoy),
 ]
 
 assert {s.group for s in SERIES} <= {g.id for g in GROUPS}, "every series needs a known group"

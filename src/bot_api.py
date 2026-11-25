@@ -12,14 +12,15 @@ from datetime import date
 import pandas as pd
 import requests
 
+from sources import SourceError
+
 GATEWAY = os.getenv("BOT_GATEWAY", "https://gateway.api.bot.or.th")
 EXG_PATH = os.getenv("BOT_EXG_PATH", "/Stat-ExchangeRate/v2/DAILY_AVG_EXG_RATE/")
-POLICY_PATH = os.getenv("BOT_POLICY_PATH", "/PolicyRate/v2/policy_rate/")
 OBS_PATH = os.getenv("BOT_OBS_PATH", "/observations/")
 CPI_SERIES = os.getenv("BOT_CPI_SERIES", "EIMEPIM00001")  # headline CPI YoY (override if needed)
 
 
-class BotApiError(RuntimeError):
+class BotApiError(SourceError):
     pass
 
 
@@ -46,18 +47,6 @@ def exchange_rate(start: date, end: date, currency: str = "USD") -> pd.DataFrame
     return pd.DataFrame({
         "date": pd.to_datetime(df["period"]),
         "value": pd.to_numeric(df["mid_rate"], errors="coerce"),
-    }).dropna().sort_values("date")
-
-
-def policy_rate(start: date, end: date) -> pd.DataFrame:
-    js = _get(POLICY_PATH, {})
-    rows = js["result"]["data"] if isinstance(js["result"]["data"], list) else js["result"]["data"]["data_detail"]
-    df = pd.DataFrame(rows)
-    date_col = next(c for c in df.columns if "date" in c.lower() or "period" in c.lower())
-    val_col = next(c for c in df.columns if "rate" in c.lower() or "value" in c.lower())
-    return pd.DataFrame({
-        "date": pd.to_datetime(df[date_col]),
-        "value": pd.to_numeric(df[val_col], errors="coerce"),
     }).dropna().sort_values("date")
 
 

@@ -8,17 +8,21 @@
 > *For educational purposes only. Not for commercial use, not investment advice, and not
 > intended to harm any person or organization. Data belongs to the Bank of Thailand.*
 
-ดึงข้อมูลจาก [BOT API Portal](https://portal.api.bot.or.th) ด้วย Python แล้วเขียนเป็นไฟล์ JSON ไฟล์เดียว ให้หน้าเว็บนำไปแสดง
+ดึงข้อมูลเศรษฐกิจไทยจากแหล่งฟรีที่ไม่ต้องใช้ key ด้วย Python แล้วเขียนเป็นไฟล์ JSON ไฟล์เดียว ให้หน้าเว็บนำไปแสดง
 
 ## ข้อมูลที่ดึง
 
 ตัวชี้วัดทั้งหมดอยู่ใน `src/series.py` ไฟล์เดียว ตัวละหนึ่งรายการ
 
-| id | ข้อมูล | ความถี่ | ถือว่าเก่าเกินเมื่อ |
-|---|---|---|---|
-| `usd_thb` | อัตราแลกเปลี่ยน USD/THB (mid rate) | รายวัน | เกิน 7 วัน |
-| `policy_rate` | ดอกเบี้ยนโยบาย | ตามมติ กนง. | ไม่ตรวจ |
-| `cpi_yoy` | เงินเฟ้อทั่วไป YoY | รายเดือน | เกิน 95 วัน |
+| id | ข้อมูล | แหล่ง | ความถี่ | ถือว่าเก่าเกินเมื่อ |
+|---|---|---|---|---|
+| `usd_thb` | อัตราแลกเปลี่ยน USD/THB | อัตราอ้างอิงของ ECB ผ่าน [Frankfurter](https://frankfurter.dev) | รายวัน | เกิน 7 วัน |
+| `policy_rate` | ดอกเบี้ยนโยบาย | [BIS Data Portal](https://data.bis.org) `WS_CBPOL` จากข้อมูลของ ธปท. | ตามมติ กนง. | ไม่ตรวจ |
+| `cpi_yoy` | เงินเฟ้อทั่วไป YoY | [BIS Data Portal](https://data.bis.org) `WS_LONG_CPI` | รายเดือน | เกิน 120 วัน |
+
+แหล่งเหล่านี้ไม่ต้องใช้ key BIS อนุญาตให้นำข้อมูลไปเผยแพร่ต่อเพื่อการที่ไม่ใช่เชิงพาณิชย์ หน้าเว็บระบุแหล่งที่มาไว้ที่ตัวชี้วัดแต่ละตัว
+
+ค่าเงินและเงินเฟ้อจะย้ายไปใช้ BOT API เมื่อได้ token เพราะ BOT เป็นแหล่งต้นทางและสดกว่า `src/bot_api.py` เตรียม client ไว้แล้ว ส่วนดอกเบี้ยนโยบายจะใช้ BIS ต่อไป เพราะ BOT API รุ่นปัจจุบัน (`/PolicyRate/v3`) ให้แค่ค่าล่าสุด ไม่มีประวัติย้อนหลัง
 
 เพิ่มตัวชี้วัดใหม่ได้โดยเพิ่ม `Series` หนึ่งรายการใน `SERIES` พร้อมฟังก์ชันดึงข้อมูลที่คืนคอลัมน์ `date` และ `value`
 
@@ -30,25 +34,24 @@ python src/build_data.py --sample   # ข้อมูลตัวอย่าง
 pytest -q tests
 ```
 
-ถ้าจะใช้ข้อมูลจริง ให้ขอ token ฟรีที่ https://portal.api.bot.or.th แล้วตั้ง environment variable `BOT_API_TOKEN` ก่อนรัน `python src/build_data.py`
+`python src/build_data.py` ดึงข้อมูลจริงจากแหล่งข้างบน
 
 ไฟล์จะออกที่ `web/public/data/dashboard.json` เปลี่ยนที่ได้ด้วย `--out`
 
-ถ้าไม่มี token, API ตอบ error หรือข้อมูลล่าสุดเก่ากว่าที่กำหนดในตารางข้างบน สคริปต์จะหยุดพร้อมบอกสาเหตุ และไม่เขียนไฟล์ ข้อมูลตัวอย่าง **ไม่ใช่ตัวเลขจริงของ ธปท.** และไฟล์จะมี `"source": "sample"` กำกับไว้
-
-ถ้า ธปท. เปลี่ยน path ของ API ให้แก้ผ่าน env ได้: `BOT_EXG_PATH`, `BOT_POLICY_PATH`, `BOT_OBS_PATH`, `BOT_CPI_SERIES`
+ถ้าแหล่งใดตอบ error หรือข้อมูลล่าสุดเก่ากว่าที่กำหนดในตารางข้างบน สคริปต์จะหยุดพร้อมบอกสาเหตุ และไม่เขียนไฟล์ ข้อมูลตัวอย่าง **ไม่ใช่ตัวเลขจริงของ ธปท.** และไฟล์จะมี `"source": "sample"` กำกับไว้
 
 ## GitHub Actions
 
 `.github/workflows/update.yml` รัน test ทุก push และ pull request แล้วดึงข้อมูลจริงทุกวันเวลา 18:00 น. ตามเวลาไทย
 
-ให้เพิ่ม secret ชื่อ `BOT_API_TOKEN` ที่ **Settings → Secrets and variables → Actions → Repository secrets** ถ้าไม่มี secret งานดึงข้อมูลจริงจะขึ้นสีแดง
+ตอนนี้ไม่ต้องใช้ secret ใดๆ เมื่อย้ายไปใช้ BOT API จะต้องเพิ่ม secret `BOT_API_TOKEN` ที่ **Settings → Secrets and variables → Actions → Repository secrets**
 
 ## โครงสร้าง
 
 ```
 src/series.py       # รายการตัวชี้วัด
-src/bot_api.py      # client เรียก BOT API
+src/sources.py      # Frankfurter และ BIS (ไม่ต้องใช้ key)
+src/bot_api.py      # client เรียก BOT API สำหรับตอนได้ token
 src/sample_data.py  # ข้อมูลตัวอย่างสำหรับรันแบบออฟไลน์
 src/build_data.py   # ดึงทุกตัวชี้วัด ตรวจความสด แล้วเขียน JSON
 tests/              # pytest

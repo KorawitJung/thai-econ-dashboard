@@ -1,7 +1,7 @@
 """Fetch every series in the registry and write the dashboard's data file.
 
 Usage:
-    python src/build_data.py                 # real BOT data; needs BOT_API_TOKEN, fails without it
+    python src/build_data.py                 # live data from the sources in src/series.py
     python src/build_data.py --sample        # synthetic data, labelled as sample
     python src/build_data.py --out path.json # default: web/public/data/dashboard.json
 """
@@ -16,9 +16,9 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent))
-import bot_api  # noqa: E402
 import sample_data  # noqa: E402
 from series import GROUPS, SERIES, Series  # noqa: E402
+from sources import SourceError  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUT = ROOT / "web" / "public" / "data" / "dashboard.json"
@@ -29,11 +29,11 @@ BANGKOK = timezone(timedelta(hours=7))
 def fetch_real(series: Series, start: date, end: date) -> pd.DataFrame:
     try:
         df = series.fetch(start, end)
-    except bot_api.BotApiError as e:
-        sys.exit(f"Could not get {series.id} from the BOT API: {e}\n"
+    except SourceError as e:
+        sys.exit(f"Could not get {series.id}: {e}\n"
                  "Nothing was written. Use --sample to build from synthetic data.")
     if df.empty:
-        sys.exit(f"The BOT API returned no data for {series.id}. Nothing was written.")
+        sys.exit(f"The source returned no data for {series.id}. Nothing was written.")
     latest = df["date"].max().date()
     if series.max_age_days is not None and (end - latest).days > series.max_age_days:
         sys.exit(f"The newest {series.id} value is from {latest}, more than {series.max_age_days} days ago. "
@@ -44,12 +44,15 @@ def fetch_real(series: Series, start: date, end: date) -> pd.DataFrame:
 def points(series: Series, df: pd.DataFrame, start: date, end: date) -> list[list]:
     df = df.sort_values("date").drop_duplicates("date", keep="last")
     if series.frequency == "event":
-        # A decision stays in force until the next one: carry the value in force at `start` and extend to `end`.
+        # Keep only the days the rate changed. A decision stays in force until the next one,
+        # so carry the value in force at `start` and extend it to `end`.
+        df = df[df["value"].ne(df["value"].shift())]
         before = df[df["date"] <= pd.Timestamp(start)]
         df = df[df["date"] > pd.Timestamp(start)]
         if not before.empty:
             df = pd.concat([pd.DataFrame({"date": [pd.Timestamp(start)], "value": [before["value"].iloc[-1]]}), df])
-        df = pd.concat([df, pd.DataFrame({"date": [pd.Timestamp(end)], "value": [df["value"].iloc[-1]]})])
+        if df["date"].iloc[-1] < pd.Timestamp(end):
+            df = pd.concat([df, pd.DataFrame({"date": [pd.Timestamp(end)], "value": [df["value"].iloc[-1]]})])
     else:
         df = df[df["date"] >= pd.Timestamp(start)]
     return [[d.date().isoformat(), round(float(v), series.decimals + 2)] for d, v in zip(df["date"], df["value"])]
@@ -62,12 +65,12 @@ def build(sample: bool, today: date) -> dict:
         df = sample_data.make(s, start, today) if sample else fetch_real(s, start, today)
         out.append({
             "id": s.id, "group": s.group, "name": vars(s.name), "sub": vars(s.sub),
-            "unit": s.unit, "decimals": s.decimals, "frequency": s.frequency,
+            "unit": s.unit, "decimals": s.decimals, "frequency": s.frequency, "source": vars(s.source),
             "points": points(s, df, start, today),
         })
     return {
         "generated": datetime.now(BANGKOK).isoformat(timespec="seconds"),
-        "source": "sample" if sample else "bot",
+        "source": "sample" if sample else "live",
         "groups": [{"id": g.id, "name": vars(g.name)} for g in GROUPS],
         "series": out,
     }
