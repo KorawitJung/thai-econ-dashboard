@@ -101,3 +101,19 @@ def test_bot_usd_thb_reads_mid_rates_oldest_first_and_skips_blank_days(monkeypat
     df = bot_api.usd_thb(date(2026, 11, 20), date(2026, 11, 25))
     assert [d.date().isoformat() for d in df["date"]] == ["2026-11-23", "2026-11-25"]
     assert df["value"].tolist() == [33.9, 33.9925]
+
+
+def test_bot_usd_thb_asks_for_at_most_31_days_at_a_time(monkeypatch):
+    periods = []
+    class Empty:
+        def json(self):
+            return {"result": {"data": {"data_detail": []}}}
+    def fake(url, params, headers):
+        periods.append((date.fromisoformat(params["start_period"]), date.fromisoformat(params["end_period"])))
+        return Empty()
+    monkeypatch.setenv(bot_api.EXCHANGE_TOKEN, "test-token")
+    monkeypatch.setattr(bot_api, "http_get", fake)
+    bot_api.usd_thb(date(2026, 1, 1), date(2026, 3, 15))
+    assert all((b - a).days < 31 for a, b in periods), "each request spans 31 days or fewer"
+    assert periods[0][0] == date(2026, 1, 1) and periods[-1][1] == date(2026, 3, 15)
+    assert all(nxt[0] - prev[1] == timedelta(days=1) for prev, nxt in zip(periods, periods[1:])), "no gaps or overlaps"
