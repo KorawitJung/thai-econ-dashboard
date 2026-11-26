@@ -19,7 +19,7 @@ STATISTICS_TOKEN = "BOT_TOKEN_STATISTICS"  # Statistics product
 EXCHANGE_TOKEN = "BOT_TOKEN_EXCHANGE"  # Exchange Rates product
 POLICY_TOKEN = "BOT_TOKEN_POLICY"  # Policy Rate product
 MAX_DAYS = 31  # the Exchange Rates API refuses longer periods
-# Statistics cuts a long daily request short without saying so (3 years came back as 6 months), so ask a quarter at a time.
+# Statistics returns only about six months of a longer daily request and reports no error, so ask for 90 days at a time.
 DAILY_CHUNK_DAYS = 90
 
 
@@ -63,7 +63,7 @@ def mid_rate(currency: str, start: date, end: date) -> pd.DataFrame:
 
 
 def statistic(code: str, start: date, end: date, scale: float = 1.0, chunk_days: int | None = None) -> pd.DataFrame:
-    """One series from the Statistics product. Monthly periods ("2026-09") are dated the first of the month."""
+    """One series from the Statistics product. A monthly period such as "2026-09" gets the first day of the month as its date."""
     headers = _headers(STATISTICS_TOKEN)
     rows = []
     while start <= end:
