@@ -7,6 +7,7 @@ from typing import Callable, Literal
 
 import pandas as pd
 
+import bot_api
 import sources
 
 Frequency = Literal["daily", "monthly", "event"]
@@ -48,8 +49,8 @@ GROUPS = [
 SERIES = [
     Series("usd_thb", "fx", Text("ดอลลาร์สหรัฐ", "US dollar"), Text("USD/THB · รายวัน", "USD/THB · daily"),
            unit="", decimals=2, frequency="daily", max_age_days=7,
-           source=Text("อัตราอ้างอิงของธนาคารกลางยุโรป (ECB) ผ่าน Frankfurter", "European Central Bank reference rate via Frankfurter"),
-           fetch=sources.frankfurter_usd_thb),
+           source=Text("ธนาคารแห่งประเทศไทย อัตราแลกเปลี่ยนเฉลี่ย (อัตรากลาง)", "Bank of Thailand, daily average mid rate"),
+           fetch=bot_api.usd_thb),
     Series("policy_rate", "rate", Text("ดอกเบี้ยนโยบาย", "Policy rate"), Text("กนง.", "MPC"),
            unit="%", decimals=2, frequency="event", max_age_days=None,
            source=Text("BIS จากข้อมูลของธนาคารแห่งประเทศไทย", "BIS, from Bank of Thailand data"),

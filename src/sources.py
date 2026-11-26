@@ -1,6 +1,5 @@
-"""Free data sources that need no API key.
+"""Free data sources that need no API key, and the HTTP helper every source uses.
 
-Frankfurter serves the European Central Bank's daily reference rates.
 The BIS Data Portal republishes the Bank of Thailand's policy rate and Thailand's CPI.
 """
 from __future__ import annotations
@@ -11,7 +10,6 @@ from datetime import date
 import pandas as pd
 import requests
 
-FRANKFURTER = "https://api.frankfurter.dev/v1"
 BIS = "https://stats.bis.org/api/v2/data/dataflow/BIS"
 
 
@@ -19,7 +17,7 @@ class SourceError(RuntimeError):
     pass
 
 
-def _get(url: str, params: dict, headers: dict | None = None) -> requests.Response:
+def http_get(url: str, params: dict, headers: dict | None = None) -> requests.Response:
     try:
         r = requests.get(url, params=params, headers=headers, timeout=60)
     except requests.RequestException as e:
@@ -29,17 +27,8 @@ def _get(url: str, params: dict, headers: dict | None = None) -> requests.Respon
     return r
 
 
-def frankfurter_usd_thb(start: date, end: date) -> pd.DataFrame:
-    js = _get(f"{FRANKFURTER}/{start.isoformat()}..{end.isoformat()}", {"base": "USD", "symbols": "THB"}).json()
-    rates = js.get("rates") or {}
-    return pd.DataFrame({
-        "date": pd.to_datetime(list(rates)),
-        "value": [day["THB"] for day in rates.values()],
-    }).sort_values("date")
-
-
 def _bis(flow: str, key: str, start: str) -> pd.DataFrame:
-    r = _get(f"{BIS}/{flow}/1.0/{key}", {"startPeriod": start, "format": "csv"}, {"Accept": "text/csv"})
+    r = http_get(f"{BIS}/{flow}/1.0/{key}", {"startPeriod": start, "format": "csv"}, {"Accept": "text/csv"})
     df = pd.read_csv(io.StringIO(r.text), usecols=["TIME_PERIOD", "OBS_VALUE"])
     return pd.DataFrame({
         "date": pd.to_datetime(df["TIME_PERIOD"]),

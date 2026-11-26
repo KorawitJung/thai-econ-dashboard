@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+import bot_api  # noqa: E402
 import build_data  # noqa: E402
 import series  # noqa: E402
 from sources import SourceError  # noqa: E402
@@ -76,3 +77,43 @@ def test_daily_policy_rate_keeps_only_decision_days(monkeypatch, tmp_path):
     assert values == [1.25, 1.0, 1.0], "window start, the cut, and today"
     dates = [d for d, _ in policy["points"]]
     assert len(dates) == len(set(dates)), "no date appears twice"
+
+
+def test_missing_bot_token_names_the_variable_and_writes_nothing(monkeypatch, tmp_path):
+    monkeypatch.delenv(bot_api.EXCHANGE_TOKEN, raising=False)
+    with_fetches(monkeypatch, usd_thb=bot_api.usd_thb)
+    out = tmp_path / "dashboard.json"
+    with pytest.raises(SystemExit, match=f"Could not get usd_thb: {bot_api.EXCHANGE_TOKEN} is not set"):
+        build_data.main(["--out", str(out)])
+    assert not out.exists()
+
+
+def test_bot_usd_thb_reads_mid_rates_oldest_first_and_skips_blank_days(monkeypatch):
+    class Reply:
+        def json(self):
+            return {"result": {"data": {"data_detail": [
+                {"period": "2026-11-25", "mid_rate": "33.9925000"},
+                {"period": "2026-11-24", "mid_rate": ""},
+                {"period": "2026-11-23", "mid_rate": "33.9000000"},
+            ]}}}
+    monkeypatch.setenv(bot_api.EXCHANGE_TOKEN, "test-token")
+    monkeypatch.setattr(bot_api, "http_get", lambda url, params, headers: Reply())
+    df = bot_api.usd_thb(date(2026, 11, 20), date(2026, 11, 25))
+    assert [d.date().isoformat() for d in df["date"]] == ["2026-11-23", "2026-11-25"]
+    assert df["value"].tolist() == [33.9, 33.9925]
+
+
+def test_bot_usd_thb_asks_for_at_most_31_days_at_a_time(monkeypatch):
+    periods = []
+    class Empty:
+        def json(self):
+            return {"result": {"data": {"data_detail": []}}}
+    def fake(url, params, headers):
+        periods.append((date.fromisoformat(params["start_period"]), date.fromisoformat(params["end_period"])))
+        return Empty()
+    monkeypatch.setenv(bot_api.EXCHANGE_TOKEN, "test-token")
+    monkeypatch.setattr(bot_api, "http_get", fake)
+    bot_api.usd_thb(date(2026, 1, 1), date(2026, 3, 15))
+    assert all((b - a).days < 31 for a, b in periods), "each request spans 31 days or fewer"
+    assert periods[0][0] == date(2026, 1, 1) and periods[-1][1] == date(2026, 3, 15)
+    assert all(nxt[0] - prev[1] == timedelta(days=1) for prev, nxt in zip(periods, periods[1:])), "no gaps or overlaps"
