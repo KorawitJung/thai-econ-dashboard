@@ -20,14 +20,14 @@
 | id | ข้อมูล | แหล่ง | ความถี่ | ถือว่าเก่าเกินเมื่อ |
 |---|---|---|---|---|
 | `usd_thb` | อัตราแลกเปลี่ยน USD/THB (อัตรากลาง เฉลี่ยรายวัน) | [BOT API](https://portal.api.bot.or.th) Exchange Rates | รายวัน | เกิน 7 วัน |
-| `policy_rate` | ดอกเบี้ยนโยบาย | [BIS Data Portal](https://data.bis.org) `WS_CBPOL` จากข้อมูลของ ธปท. | ตามมติ กนง. | ไม่ตรวจ |
+| `policy_rate` | ดอกเบี้ยนโยบาย และวันประชุม กนง. ล่าสุด | อัตรา: [BIS Data Portal](https://data.bis.org) `WS_CBPOL` จากข้อมูลของ ธปท. วันประชุม: BOT API Policy Rate | ตามมติ กนง. | ไม่ตรวจ |
 | `cpi_yoy` | เงินเฟ้อทั่วไป YoY | [BIS Data Portal](https://data.bis.org) `WS_LONG_CPI` | รายเดือน | เกิน 120 วัน |
 
 BIS ไม่ต้องใช้ key และอนุญาตให้นำข้อมูลไปเผยแพร่ต่อเพื่อการที่ไม่ใช่เชิงพาณิชย์ หน้าเว็บระบุแหล่งที่มาไว้ที่ตัวชี้วัดแต่ละตัว
 
-BOT API ใช้ token แยกตามแอปใน portal และแต่ละแอป subscribe หมวดเดียว ค่าเงินใช้แอปที่ subscribe หมวด Exchange Rates โค้ดอ่าน token จากตัวแปร `BOT_TOKEN_EXCHANGE`
+BOT API ใช้ token แยกตามแอปใน portal และแต่ละแอป subscribe หมวดเดียว ค่าเงินใช้แอปที่ subscribe หมวด Exchange Rates โค้ดอ่าน token จากตัวแปร `BOT_TOKEN_EXCHANGE` วันประชุม กนง. ใช้แอปที่ subscribe หมวด Policy Rate อ่านจาก `BOT_TOKEN_POLICY`
 
-ดอกเบี้ยนโยบายยังใช้ BIS เพราะ BOT API รุ่นปัจจุบัน (`/PolicyRate/v3`) ให้แค่ค่าล่าสุด ไม่มีประวัติย้อนหลัง และ BOT ไม่มีเงินเฟ้อทั่วไปของทั้งประเทศ CPI จึงใช้ BIS เช่นกัน
+กราฟดอกเบี้ยนโยบายยังใช้ BIS เพราะ BOT API รุ่นปัจจุบัน (`/PolicyRate/v3`) ให้แค่ค่าล่าสุด ไม่มีประวัติย้อนหลัง แต่ให้วันประกาศมติครั้งล่าสุด ซึ่งบอกวันประชุมได้แม้มตินั้นจะคงอัตราไว้ และ BOT ไม่มีเงินเฟ้อทั่วไปของทั้งประเทศ CPI จึงใช้ BIS เช่นกัน
 
 เพิ่มตัวชี้วัดใหม่ได้โดยเพิ่ม `Series` หนึ่งรายการใน `SERIES` พร้อมฟังก์ชันดึงข้อมูลที่คืนคอลัมน์ `date` และ `value`
 
@@ -39,7 +39,7 @@ python src/build_data.py --sample   # ข้อมูลตัวอย่าง
 pytest -q tests
 ```
 
-`python src/build_data.py` ดึงข้อมูลจริงจากแหล่งข้างบน ต้องตั้งตัวแปร `BOT_TOKEN_EXCHANGE` ก่อน
+`python src/build_data.py` ดึงข้อมูลจริงจากแหล่งข้างบน ต้องตั้งตัวแปร `BOT_TOKEN_EXCHANGE` และ `BOT_TOKEN_POLICY` ก่อน
 
 ไฟล์จะออกที่ `web/public/data/dashboard.json` เปลี่ยนที่ได้ด้วย `--out`
 
@@ -78,7 +78,7 @@ npm run build   # typecheck แล้ว build ลง web/dist
 |---|---|---|
 | `BOT_API_TOKEN_3` | Exchange Rates | `usd_thb` ส่งให้โค้ดเป็น `BOT_TOKEN_EXCHANGE` |
 | `BOT_API_TOKEN` | Statistics | ยังไม่ได้ใช้ |
-| `BOT_API_TOKEN_2` | Policy Rate | ยังไม่ได้ใช้ |
+| `BOT_API_TOKEN_2` | Policy Rate | วันประชุม กนง. ล่าสุดของ `policy_rate` ส่งให้โค้ดเป็น `BOT_TOKEN_POLICY` |
 
 ## โครงสร้าง
 

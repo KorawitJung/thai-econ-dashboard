@@ -41,6 +41,14 @@ def fetch_real(series: Series, start: date, end: date) -> pd.DataFrame:
     return df
 
 
+def fetch_meeting(series: Series) -> date:
+    try:
+        return series.last_meeting()
+    except SourceError as e:
+        sys.exit(f"Could not get the last meeting for {series.id}: {e}\n"
+                 "Nothing was written. Use --sample to build from synthetic data.")
+
+
 def points(series: Series, df: pd.DataFrame, start: date, end: date) -> list[list]:
     df = df.sort_values("date").drop_duplicates("date", keep="last")
     if series.frequency == "event":
@@ -63,11 +71,15 @@ def build(sample: bool, today: date) -> dict:
     out = []
     for s in SERIES:
         df = sample_data.make(s, start, today) if sample else fetch_real(s, start, today)
-        out.append({
+        entry = {
             "id": s.id, "group": s.group, "name": vars(s.name), "sub": vars(s.sub),
             "unit": s.unit, "decimals": s.decimals, "frequency": s.frequency, "source": vars(s.source),
             "points": points(s, df, start, today),
-        })
+        }
+        if s.last_meeting:
+            meeting = df["date"].max().date() if sample else fetch_meeting(s)
+            entry["lastMeeting"] = meeting.isoformat()
+        out.append(entry)
     return {
         "generated": datetime.now(BANGKOK).isoformat(timespec="seconds"),
         "source": "sample" if sample else "live",

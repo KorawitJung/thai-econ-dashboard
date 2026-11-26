@@ -38,6 +38,7 @@ class Series:
     max_age_days: int | None  # None: changes only on decisions, so an old last value is normal
     source: Text
     fetch: Fetch
+    last_meeting: Callable[[], date] | None = None  # event series: date of the latest decision meeting
 
 
 GROUPS = [
@@ -54,7 +55,7 @@ SERIES = [
     Series("policy_rate", "rate", Text("ดอกเบี้ยนโยบาย", "Policy rate"), Text("กนง.", "MPC"),
            unit="%", decimals=2, frequency="event", max_age_days=None,
            source=Text("BIS จากข้อมูลของธนาคารแห่งประเทศไทย", "BIS, from Bank of Thailand data"),
-           fetch=sources.bis_policy_rate),
+           fetch=sources.bis_policy_rate, last_meeting=bot_api.last_policy_meeting),
     # BIS adds a month's CPI about two months after the month starts, so allow four months.
     Series("cpi_yoy", "infl", Text("เงินเฟ้อทั่วไป", "Headline CPI"), Text("YoY · รายเดือน", "YoY · monthly"),
            unit="%", decimals=2, frequency="monthly", max_age_days=120,

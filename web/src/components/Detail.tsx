@@ -63,8 +63,15 @@ export function Detail({ data, series: s, lang, t, range, onRange, onBack, langB
         <div><dt>{t.high}</dt><dd>{formatValue(s, Math.max(...values))}</dd></div>
         <div><dt>{t.low}</dt><dd>{formatValue(s, Math.min(...values))}</dd></div>
       </dl>
+      {s.lastMeeting && (
+        <div className="card info-row">
+          <span>{t.lastMeeting}</span>
+          <strong>{formatDate(s.lastMeeting, lang)}</strong>
+        </div>
+      )}
       <p className="footnote">
         {t.asOf} {formatDate(lastPoint[0], lang)} · {data.source === 'sample' ? t.sampleSource : `${t.sourceLabel} ${s.source[lang]}`}
+        {s.lastMeeting && data.source !== 'sample' && ` · ${t.meetingSource}`}
       </p>
     </main>
   )

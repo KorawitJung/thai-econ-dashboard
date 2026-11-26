@@ -6,7 +6,7 @@ product reads its token from its own environment variable.
 from __future__ import annotations
 
 import os
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import pandas as pd
 
@@ -14,6 +14,7 @@ from sources import SourceError, http_get
 
 GATEWAY = "https://gateway.api.bot.or.th"
 EXCHANGE_TOKEN = "BOT_TOKEN_EXCHANGE"  # Exchange Rates product
+POLICY_TOKEN = "BOT_TOKEN_POLICY"  # Policy Rate product
 MAX_DAYS = 31  # the Exchange Rates API refuses longer periods
 
 
@@ -40,3 +41,14 @@ def usd_thb(start: date, end: date) -> pd.DataFrame:
         "date": pd.to_datetime(df["period"]),
         "value": pd.to_numeric(df["mid_rate"], errors="coerce"),
     }).dropna().sort_values("date")
+
+
+def last_policy_meeting() -> date:
+    """Announcement date of the latest MPC decision, whether the rate changed or not."""
+    js = http_get(f"{GATEWAY}/PolicyRate/v3/policy_rate", {},
+                  {"Authorization": _token(POLICY_TOKEN), "accept": "application/json"}).json()
+    raw = js.get("result", {}).get("announcement_date")
+    try:
+        return datetime.strptime(raw, "%Y/%m/%d").date()
+    except (TypeError, ValueError):
+        raise SourceError(f"Policy Rate announcement_date is {raw!r}, expected YYYY/MM/DD") from None
