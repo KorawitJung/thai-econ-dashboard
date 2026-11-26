@@ -18,6 +18,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).parent))
 import sample_data  # noqa: E402
 from series import GROUPS, SERIES, Series  # noqa: E402
+from bot_api import Meeting  # noqa: E402
 from sources import SourceError  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -41,9 +42,9 @@ def fetch_real(series: Series, start: date, end: date) -> pd.DataFrame:
     return df
 
 
-def fetch_meeting(series: Series) -> date:
+def fetch_meeting(series: Series) -> Meeting:
     try:
-        return series.last_meeting()
+        return series.meeting()
     except SourceError as e:
         sys.exit(f"Could not get the last meeting for {series.id}: {e}\n"
                  "Nothing was written. Use --sample to build from synthetic data.")
@@ -73,12 +74,13 @@ def build(sample: bool, today: date) -> dict:
         df = sample_data.make(s, start, today) if sample else fetch_real(s, start, today)
         entry = {
             "id": s.id, "group": s.group, "name": vars(s.name), "sub": vars(s.sub),
-            "unit": s.unit, "decimals": s.decimals, "frequency": s.frequency, "source": vars(s.source),
+            "unit": s.unit, "decimals": s.decimals, "frequency": s.frequency, "change": s.change,
+            "source": vars(s.source),
             "points": points(s, df, start, today),
         }
-        if s.last_meeting:
-            meeting = df["date"].max().date() if sample else fetch_meeting(s)
-            entry["lastMeeting"] = meeting.isoformat()
+        if s.meeting:
+            m = sample_data.meeting(df) if sample else fetch_meeting(s)
+            entry["meeting"] = {"date": m.day.isoformat(), "decision": {"th": m.decision_th, "en": m.decision_en}}
         out.append(entry)
     return {
         "generated": datetime.now(BANGKOK).isoformat(timespec="seconds"),

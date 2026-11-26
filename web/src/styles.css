@@ -15,7 +15,8 @@
   --tint-fx: #0066d6;
   --tint-rate: #8944ab;
   --tint-infl: #c93400;
-  --tint-macro: #00748f;
+  --tint-econ: #00748f;
+  --tint-ext: #b25000;
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Noto Sans Thai", "Helvetica Neue", sans-serif;
 }
 
@@ -36,7 +37,8 @@
     --tint-fx: #0a84ff;
     --tint-rate: #bf5af2;
     --tint-infl: #ff9f0a;
-    --tint-macro: #64d2ff;
+    --tint-econ: #64d2ff;
+    --tint-ext: #ffb340;
   }
 }
 
@@ -85,7 +87,8 @@ h1, h2, p { margin: 0; }
 .tint-fx { color: var(--tint-fx); }
 .tint-rate { color: var(--tint-rate); }
 .tint-infl { color: var(--tint-infl); }
-.tint-macro { color: var(--tint-macro); }
+.tint-econ { color: var(--tint-econ); }
+.tint-ext { color: var(--tint-ext); }
 
 .sample-note {
   padding: 10px 14px; border-radius: 12px; background: var(--card);
@@ -101,9 +104,9 @@ h1, h2, p { margin: 0; }
   width: 100%; min-height: 64px; display: flex; align-items: center; gap: 10px;
   padding: 10px 14px 10px 16px; border: 0; background: none; text-align: left;
 }
-.row:active { background: var(--seg); }
+.row:active, .row[aria-current="true"] { background: var(--seg); }
 .row-label { flex: 1 1 auto; display: flex; flex-direction: column; }
-.row-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row-name { font-weight: 600; line-height: 1.35; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .row-sub { font-size: 13px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row-figures { flex: none; min-width: 84px; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
 .row-value, .big, dd { font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -153,9 +156,33 @@ dd { margin: 0; font-weight: 600; }
 
 .info-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 12px 16px; }
 .info-row span { color: var(--sub); }
+.meeting .decision { padding: 0 16px 14px; font-size: 15px; line-height: 1.5; }
 .footnote { font-size: 13px; color: var(--sub); }
 .state {
   min-height: 60vh; display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 12px; padding: 24px; text-align: center; color: var(--sub);
 }
 .state p:first-child { color: var(--ink); font-weight: 600; }
+
+/* iPad and desktop: the list stays on the left and the chosen indicator fills the right. */
+.split { display: grid; grid-template-columns: minmax(320px, 36%) minmax(0, 1fr); height: 100vh; height: 100dvh; }
+/* The big chart sits right beside the list, so a narrow sidebar gives the names the room instead. */
+@media (max-width: 999px) { .sidebar .spark { display: none; } }
+.sidebar, .pane { overflow-y: auto; overscroll-behavior: contain; }
+.sidebar { border-right: 0.5px solid var(--line); }
+.sidebar .screen { max-width: none; }
+.pane .screen { max-width: 860px; padding-top: max(24px, env(safe-area-inset-top)); padding-left: 32px; padding-right: max(32px, env(safe-area-inset-right)); }
+.pane .chart { height: clamp(240px, 42vh, 420px); }
+.pane .big { font-size: 48px; }
+
+@media (min-width: 1000px) {
+  .split { grid-template-columns: 400px minmax(0, 1fr); }
+  .pane .stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .pane .stats div { border-bottom: 0; }
+  .pane .stats div + div { border-left: 0.5px solid var(--line); }
+  .pane .stats div:nth-child(odd) { border-right: 0; }
+}
+
+@media (hover: hover) {
+  .row:hover { background: var(--seg); }
+}

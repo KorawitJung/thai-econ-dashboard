@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useEffect, useRef } from 'react'
 import type { Dashboard, Lang } from '../data'
 import { direction, formatChange, formatValue, last, latestChange, rangeChange, sparkPoints } from '../derive'
 import type { Strings } from '../i18n'
@@ -11,11 +12,18 @@ interface Props {
   t: Strings
   onOpen: (id: string) => void
   langButton: ReactNode
+  /** Split view: the series shown beside the list. */
+  selected?: string
 }
 
-export function Overview({ data, lang, t, onOpen, langButton }: Props) {
+export function Overview({ data, lang, t, onOpen, langButton, selected }: Props) {
+  const current = useRef<HTMLButtonElement>(null)
+  // A shared link can open an indicator far down the list; keep its row in sight.
+  useEffect(() => {
+    current.current?.scrollIntoView({ block: 'nearest' })
+  }, [selected])
   return (
-    <main className="screen">
+    <div className="screen">
       <div className="toolbar end">{langButton}</div>
       <header className="large-title">
         <h1>{t.title}</h1>
@@ -35,7 +43,8 @@ export function Overview({ data, lang, t, onOpen, langButton }: Props) {
                 const spark = sparkPoints(s)
                 return (
                   <li key={s.id}>
-                    <button className="row" onClick={() => onOpen(s.id)}>
+                    <button className="row" onClick={() => onOpen(s.id)}
+                      aria-current={s.id === selected || undefined} ref={s.id === selected ? current : undefined}>
                       <span className="row-label">
                         <span className="row-name">{s.name[lang]}</span>
                         <span className="row-sub">{s.sub[lang]}</span>
@@ -54,6 +63,6 @@ export function Overview({ data, lang, t, onOpen, langButton }: Props) {
         )
       })}
       <p className="footnote">{t.disclaimer}</p>
-    </main>
+    </div>
   )
 }

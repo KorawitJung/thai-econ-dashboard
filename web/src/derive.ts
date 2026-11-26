@@ -1,4 +1,4 @@
-import type { Point, Series } from './data'
+import type { ChangeKind, Point, Series } from './data'
 
 export const RANGES = { '6M': 182, '1Y': 365, '3Y': 1095 } as const
 export type Range = keyof typeof RANGES
@@ -13,12 +13,11 @@ export function last(s: Series): Point {
 
 export interface Change {
   value: number
-  /** 'pct': percent change of a level. 'pp': difference in percentage points of a rate. */
-  kind: 'pct' | 'pp'
+  kind: ChangeKind
 }
 
 function diff(s: Series, from: number, to: number): Change {
-  return s.unit === '%' ? { value: to - from, kind: 'pp' } : { value: (to / from - 1) * 100, kind: 'pct' }
+  return s.change === 'diff' ? { value: to - from, kind: 'diff' } : { value: (to / from - 1) * 100, kind: 'pct' }
 }
 
 /** The latest move: last point against the one before, or for a decision series, the last decision against the one it replaced. */
@@ -28,7 +27,7 @@ export function latestChange(s: Series): Change {
     for (let i = p.length - 1; i > 0; i--) {
       if (p[i]![1] !== p[i - 1]![1]) return diff(s, p[i - 1]![1], p[i]![1])
     }
-    return { value: 0, kind: 'pp' }
+    return { value: 0, kind: s.change }
   }
   return diff(s, p[p.length - 2]![1], p[p.length - 1]![1])
 }

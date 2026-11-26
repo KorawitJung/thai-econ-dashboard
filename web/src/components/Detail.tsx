@@ -12,8 +12,9 @@ interface Props {
   t: Strings
   range: Range
   onRange: (r: Range) => void
-  onBack: () => void
-  langButton: ReactNode
+  /** Phone only. In split view the list stays beside the detail, so there is nothing to go back to. */
+  onBack?: () => void
+  langButton?: ReactNode
 }
 
 const W = 358
@@ -29,14 +30,16 @@ export function Detail({ data, series: s, lang, t, range, onRange, onBack, langB
   const group = data.groups.find((x) => x.id === s.group)
   const lastPoint = last(s)
   return (
-    <main className="screen">
-      <div className="toolbar">
-        <button className="back" onClick={onBack}>
-          <svg width="12" height="20" viewBox="0 0 12 20" aria-hidden="true"><path d="M10 2 2 10l8 8" /></svg>
-          {t.back}
-        </button>
-        {langButton}
-      </div>
+    <div className="screen">
+      {onBack && (
+        <div className="toolbar">
+          <button className="back" onClick={onBack}>
+            <svg width="12" height="20" viewBox="0 0 12 20" aria-hidden="true"><path d="M10 2 2 10l8 8" /></svg>
+            {t.back}
+          </button>
+          {langButton}
+        </div>
+      )}
       <header className="detail-title">
         {group && <p className={`eyebrow tint-${s.group}`}>{group.name[lang]}</p>}
         <h1>{s.name[lang]}</h1>
@@ -63,16 +66,19 @@ export function Detail({ data, series: s, lang, t, range, onRange, onBack, langB
         <div><dt>{t.high}</dt><dd>{formatValue(s, Math.max(...values))}</dd></div>
         <div><dt>{t.low}</dt><dd>{formatValue(s, Math.min(...values))}</dd></div>
       </dl>
-      {s.lastMeeting && (
-        <div className="card info-row">
-          <span>{t.lastMeeting}</span>
-          <strong>{formatDate(s.lastMeeting, lang)}</strong>
-        </div>
+      {s.meeting && (
+        <section className="card meeting" aria-label={t.lastMeeting}>
+          <div className="info-row">
+            <span>{t.lastMeeting}</span>
+            <strong>{formatDate(s.meeting.date, lang)}</strong>
+          </div>
+          <p className="decision">{s.meeting.decision[lang]}</p>
+        </section>
       )}
       <p className="footnote">
         {t.asOf} {formatDate(lastPoint[0], lang)} · {data.source === 'sample' ? t.sampleSource : `${t.sourceLabel} ${s.source[lang]}`}
-        {s.lastMeeting && data.source !== 'sample' && ` · ${t.meetingSource}`}
+        {s.meeting && data.source !== 'sample' && ` · ${t.meetingSource}`}
       </p>
-    </main>
+    </div>
   )
 }
