@@ -43,6 +43,8 @@ jobs:
         with: {node-version: "24", cache: npm, cache-dependency-path: web/package-lock.json}
       - run: pip install -r requirements.txt
       - run: python src/build_data.py
+        env:
+          BOT_TOKEN_EXCHANGE: ${{ secrets.BOT_API_TOKEN_3 }}   # app subscribed to Exchange Rates
       - run: npm ci && npm run build
         working-directory: web
       - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4

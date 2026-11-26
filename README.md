@@ -3,12 +3,13 @@
 > ⚠️ **คำเตือน / Disclaimer**
 > โปรเจกต์นี้ทำขึ้น **เพื่อการศึกษาเท่านั้น** ไม่ได้ใช้ในเชิงพาณิชย์ ไม่ใช่คำแนะนำการลงทุน
 > และไม่ได้มีเจตนาทำให้บุคคลหรือองค์กรใดเสียหาย ข้อมูลเป็นของธนาคารแห่งประเทศไทย (ธปท.)
-> โปรดตรวจสอบตัวเลขกับแหล่งข้อมูลทางการก่อนนำไปใช้ทุกครั้ง
+> และ BIS ตามที่ระบุในตารางด้านล่าง โปรดตรวจสอบตัวเลขกับแหล่งข้อมูลทางการก่อนนำไปใช้ทุกครั้ง
 >
 > *For educational purposes only. Not for commercial use, not investment advice, and not
-> intended to harm any person or organization. Data belongs to the Bank of Thailand.*
+> intended to harm any person or organization. Data belongs to the Bank of Thailand and the BIS,
+> as listed below.*
 
-ดึงข้อมูลเศรษฐกิจไทยจากแหล่งฟรีที่ไม่ต้องใช้ key ด้วย Python แล้วเขียนเป็นไฟล์ JSON ไฟล์เดียว ให้หน้าเว็บนำไปแสดง
+ดึงข้อมูลเศรษฐกิจไทยจาก BOT API และ BIS ด้วย Python แล้วเขียนเป็นไฟล์ JSON ไฟล์เดียว ให้หน้าเว็บนำไปแสดง
 
 หน้าเว็บเขียนด้วย React + TypeScript หน้าตาแบบแอป iOS เน้นการเปิดบนมือถือ มีภาษาไทยและอังกฤษ และเปลี่ยนเป็น dark mode ตามเครื่อง GitHub Actions สร้างข้อมูลและเผยแพร่บน GitHub Pages ทุกวัน
 
@@ -18,13 +19,15 @@
 
 | id | ข้อมูล | แหล่ง | ความถี่ | ถือว่าเก่าเกินเมื่อ |
 |---|---|---|---|---|
-| `usd_thb` | อัตราแลกเปลี่ยน USD/THB | อัตราอ้างอิงของ ECB ผ่าน [Frankfurter](https://frankfurter.dev) | รายวัน | เกิน 7 วัน |
+| `usd_thb` | อัตราแลกเปลี่ยน USD/THB (อัตรากลาง เฉลี่ยรายวัน) | [BOT API](https://portal.api.bot.or.th) Exchange Rates | รายวัน | เกิน 7 วัน |
 | `policy_rate` | ดอกเบี้ยนโยบาย | [BIS Data Portal](https://data.bis.org) `WS_CBPOL` จากข้อมูลของ ธปท. | ตามมติ กนง. | ไม่ตรวจ |
 | `cpi_yoy` | เงินเฟ้อทั่วไป YoY | [BIS Data Portal](https://data.bis.org) `WS_LONG_CPI` | รายเดือน | เกิน 120 วัน |
 
-แหล่งเหล่านี้ไม่ต้องใช้ key BIS อนุญาตให้นำข้อมูลไปเผยแพร่ต่อเพื่อการที่ไม่ใช่เชิงพาณิชย์ หน้าเว็บระบุแหล่งที่มาไว้ที่ตัวชี้วัดแต่ละตัว
+BIS ไม่ต้องใช้ key และอนุญาตให้นำข้อมูลไปเผยแพร่ต่อเพื่อการที่ไม่ใช่เชิงพาณิชย์ หน้าเว็บระบุแหล่งที่มาไว้ที่ตัวชี้วัดแต่ละตัว
 
-ค่าเงินและเงินเฟ้อจะย้ายไปใช้ BOT API เมื่อได้ token เพราะ BOT เป็นแหล่งต้นทางและสดกว่า `src/bot_api.py` เตรียม client ไว้แล้ว ส่วนดอกเบี้ยนโยบายจะใช้ BIS ต่อไป เพราะ BOT API รุ่นปัจจุบัน (`/PolicyRate/v3`) ให้แค่ค่าล่าสุด ไม่มีประวัติย้อนหลัง
+BOT API ใช้ token แยกตามแอปใน portal และแต่ละแอป subscribe หมวดเดียว ค่าเงินใช้แอปที่ subscribe หมวด Exchange Rates โค้ดอ่าน token จากตัวแปร `BOT_TOKEN_EXCHANGE`
+
+ดอกเบี้ยนโยบายยังใช้ BIS เพราะ BOT API รุ่นปัจจุบัน (`/PolicyRate/v3`) ให้แค่ค่าล่าสุด ไม่มีประวัติย้อนหลัง และ BOT ไม่มีเงินเฟ้อทั่วไปของทั้งประเทศ CPI จึงใช้ BIS เช่นกัน
 
 เพิ่มตัวชี้วัดใหม่ได้โดยเพิ่ม `Series` หนึ่งรายการใน `SERIES` พร้อมฟังก์ชันดึงข้อมูลที่คืนคอลัมน์ `date` และ `value`
 
@@ -36,7 +39,7 @@ python src/build_data.py --sample   # ข้อมูลตัวอย่าง
 pytest -q tests
 ```
 
-`python src/build_data.py` ดึงข้อมูลจริงจากแหล่งข้างบน
+`python src/build_data.py` ดึงข้อมูลจริงจากแหล่งข้างบน ต้องตั้งตัวแปร `BOT_TOKEN_EXCHANGE` ก่อน
 
 ไฟล์จะออกที่ `web/public/data/dashboard.json` เปลี่ยนที่ได้ด้วย `--out`
 
@@ -69,14 +72,20 @@ npm run build   # typecheck แล้ว build ลง web/dist
 
 ต้องเปิด GitHub Pages ก่อนครั้งแรก ที่ **Settings → Pages → Source** ให้เลือก **GitHub Actions**
 
-ตอนนี้ไม่ต้องใช้ secret ใดๆ เมื่อย้ายไปใช้ BOT API จะต้องเพิ่ม secret `BOT_API_TOKEN` ที่ **Settings → Secrets and variables → Actions → Repository secrets**
+ขั้นดึงข้อมูลจริงใช้ repository secret ที่ **Settings → Secrets and variables → Actions**
+
+| Secret | หมวดใน BOT API | ใช้กับ |
+|---|---|---|
+| `BOT_API_TOKEN_3` | Exchange Rates | `usd_thb` ส่งให้โค้ดเป็น `BOT_TOKEN_EXCHANGE` |
+| `BOT_API_TOKEN` | Statistics | ยังไม่ได้ใช้ |
+| `BOT_API_TOKEN_2` | Policy Rate | ยังไม่ได้ใช้ |
 
 ## โครงสร้าง
 
 ```
 src/series.py       # รายการตัวชี้วัด
-src/sources.py      # Frankfurter และ BIS (ไม่ต้องใช้ key)
-src/bot_api.py      # client เรียก BOT API สำหรับตอนได้ token
+src/sources.py      # BIS (ไม่ต้องใช้ key) และตัวช่วยเรียก HTTP
+src/bot_api.py      # BOT API อ่าน token ของแต่ละหมวดจากตัวแปรของตัวเอง
 src/sample_data.py  # ข้อมูลตัวอย่างสำหรับรันแบบออฟไลน์
 src/build_data.py   # ดึงทุกตัวชี้วัด ตรวจความสด แล้วเขียน JSON
 tests/              # pytest
@@ -84,4 +93,4 @@ web/                # หน้าเว็บ React + TypeScript (Vite)
 ```
 
 ## License
-[MIT](LICENSE). ข้อมูลเศรษฐกิจเป็นลิขสิทธิ์ของธนาคารแห่งประเทศไทย ใช้ตามเงื่อนไขของ BOT API Portal
+[MIT](LICENSE). ข้อมูลเศรษฐกิจเป็นของธนาคารแห่งประเทศไทยและ BIS ใช้ตามเงื่อนไขของ BOT API Portal และ BIS

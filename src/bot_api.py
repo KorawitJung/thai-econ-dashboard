@@ -1,8 +1,7 @@
-"""Thin client for the Bank of Thailand (BOT) API Portal.
+"""Bank of Thailand API Portal (https://portal.api.bot.or.th).
 
-Get a free token at https://portal.api.bot.or.th and set it as the
-BOT_API_TOKEN environment variable. Endpoint paths can be overridden with
-environment variables in case BOT changes versions.
+Each portal app gets its own token and subscribes to one product, so every
+product reads its token from its own environment variable.
 """
 from __future__ import annotations
 
@@ -10,51 +9,27 @@ import os
 from datetime import date
 
 import pandas as pd
-import requests
 
-from sources import SourceError
+from sources import SourceError, http_get
 
-GATEWAY = os.getenv("BOT_GATEWAY", "https://gateway.api.bot.or.th")
-EXG_PATH = os.getenv("BOT_EXG_PATH", "/Stat-ExchangeRate/v2/DAILY_AVG_EXG_RATE/")
-OBS_PATH = os.getenv("BOT_OBS_PATH", "/observations/")
-CPI_SERIES = os.getenv("BOT_CPI_SERIES", "EIMEPIM00001")  # headline CPI YoY (override if needed)
+GATEWAY = "https://gateway.api.bot.or.th"
+EXCHANGE_TOKEN = "BOT_TOKEN_EXCHANGE"  # Exchange Rates product
 
 
-class BotApiError(SourceError):
-    pass
-
-
-def _get(path: str, params: dict) -> dict:
-    token = os.getenv("BOT_API_TOKEN")
+def _token(env: str) -> str:
+    token = os.getenv(env, "").strip()
     if not token:
-        raise BotApiError("BOT_API_TOKEN is not set")
-    r = requests.get(
-        GATEWAY + path,
-        params=params,
-        headers={"Authorization": token, "accept": "application/json"},
-        timeout=30,
-    )
-    if r.status_code != 200:
-        raise BotApiError(f"{path} -> HTTP {r.status_code}: {r.text[:200]}")
-    return r.json()
+        raise SourceError(f"{env} is not set. It holds the BOT API token for this product.")
+    return token
 
 
-def exchange_rate(start: date, end: date, currency: str = "USD") -> pd.DataFrame:
-    js = _get(EXG_PATH, {"start_period": start.isoformat(), "end_period": end.isoformat(), "currency": currency})
-    rows = js["result"]["data"]["data_detail"]
-    df = pd.DataFrame(rows)
-    df = df[df["mid_rate"].astype(str).str.strip() != ""]
+def usd_thb(start: date, end: date) -> pd.DataFrame:
+    """Daily average USD mid rate, in baht per dollar."""
+    js = http_get(f"{GATEWAY}/Stat-ExchangeRate/v2/DAILY_AVG_EXG_RATE/",
+                  {"start_period": start.isoformat(), "end_period": end.isoformat(), "currency": "USD"},
+                  {"Authorization": _token(EXCHANGE_TOKEN), "accept": "application/json"}).json()
+    rows = pd.DataFrame(js["result"]["data"]["data_detail"], columns=["period", "mid_rate"])
     return pd.DataFrame({
-        "date": pd.to_datetime(df["period"]),
-        "value": pd.to_numeric(df["mid_rate"], errors="coerce"),
-    }).dropna().sort_values("date")
-
-
-def inflation(start: date, end: date) -> pd.DataFrame:
-    js = _get(OBS_PATH, {"series_code": CPI_SERIES, "start_period": start.isoformat(), "end_period": end.isoformat()})
-    obs = js["result"]["series"][0]["observations"]
-    df = pd.DataFrame(obs)
-    return pd.DataFrame({
-        "date": pd.to_datetime(df["period_start"]),
-        "value": pd.to_numeric(df["value"], errors="coerce"),
+        "date": pd.to_datetime(rows["period"]),
+        "value": pd.to_numeric(rows["mid_rate"], errors="coerce"),
     }).dropna().sort_values("date")
