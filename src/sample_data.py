@@ -36,4 +36,6 @@ def make(series: Series, start: date, end: date) -> pd.DataFrame:
 
 
 def meeting(df: pd.DataFrame) -> Meeting:
-    return Meeting(df["date"].max().date(), "ข้อมูลตัวอย่าง ไม่ใช่มติจริงของ กนง.", "Sample data, not a real MPC decision.")
+    last = df.sort_values("date").iloc[-1]
+    return Meeting(last["date"].date(), float(last["value"]), "ข้อมูลตัวอย่าง ไม่ใช่มติจริงของ กนง.",
+                   "Sample data, not a real MPC decision.")

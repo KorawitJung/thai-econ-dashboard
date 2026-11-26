@@ -12,7 +12,7 @@ from functools import cache
 
 import pandas as pd
 
-from sources import SourceError, http_get
+from sources import SourceError, bis_policy_rate, http_get
 
 GATEWAY = "https://gateway.api.bot.or.th"
 STATISTICS_TOKEN = "BOT_TOKEN_STATISTICS"  # Statistics product
@@ -26,6 +26,7 @@ DAILY_CHUNK_DAYS = 90
 @dataclass(frozen=True)
 class Meeting:
     day: date
+    rate: float
     decision_th: str
     decision_en: str
 
@@ -80,6 +81,7 @@ def statistic(code: str, start: date, end: date, scale: float = 1.0, chunk_days:
     }).dropna().sort_values("date").reset_index(drop=True)
 
 
+@cache
 def last_policy_meeting() -> Meeting:
     """The latest MPC decision, whether the rate changed or not."""
     js = http_get(f"{GATEWAY}/PolicyRate/v3/policy_rate", {}, _headers(POLICY_TOKEN)).json()
@@ -92,4 +94,20 @@ def last_policy_meeting() -> Meeting:
     th, en = (result.get(k, "").strip() for k in ("news_text_th", "news_text_en"))
     if not th or not en:
         raise SourceError("Policy Rate has no decision text in news_text_th and news_text_en")
-    return Meeting(day, th, en)
+    try:
+        rate = float(result.get("data"))
+    except (TypeError, ValueError):
+        raise SourceError(f"Policy Rate data is {result.get('data')!r}, expected a number") from None
+    return Meeting(day, rate, th, en)
+
+
+def policy_rate(start: date, end: date) -> pd.DataFrame:
+    """BIS history of the policy rate, ending with the rate BOT set at its latest meeting.
+
+    BIS publishes a change days after the MPC announces it. Without BOT's rate, the chart
+    could show the old rate beside a decision that changed it.
+    """
+    m = last_policy_meeting()
+    df = bis_policy_rate(start, end)
+    df = df[df["date"] < pd.Timestamp(m.day)]
+    return pd.concat([df, pd.DataFrame({"date": [pd.Timestamp(m.day)], "value": [m.rate]})], ignore_index=True)
