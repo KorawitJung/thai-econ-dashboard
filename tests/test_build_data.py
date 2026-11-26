@@ -24,7 +24,8 @@ def a_meeting() -> bot_api.Meeting:
 
 def with_fetches(monkeypatch, meeting=a_meeting, **by_id):
     """Point every series at a local fetch so no test touches the network."""
-    regs = [series.Series(**{**vars(s), "fetch": by_id.get(s.id, lambda st, e: frame([400, 30, 1])),
+    weekly = list(range(1100, 0, -7))  # three years of points a week apart, the newest yesterday
+    regs = [series.Series(**{**vars(s), "fetch": by_id.get(s.id, lambda st, e: frame(weekly)),
                              "meeting": meeting if s.meeting else None}) for s in series.SERIES]
     monkeypatch.setattr(build_data, "SERIES", regs)
 
@@ -175,6 +176,52 @@ def test_daily_statistics_are_asked_for_a_quarter_at_a_time(monkeypatch):
     assert periods[0][0] == date(2023, 11, 27) and periods[-1][1] == date(2026, 11, 26)
     assert all(nxt[0] - prev[1] == timedelta(days=1) for prev, nxt in zip(periods, periods[1:])), "no gaps or overlaps"
     assert len(df) == len(periods), "rows from every chunk are kept"
+
+
+def test_a_hole_inside_a_daily_series_writes_nothing(tmp_path, monkeypatch):
+    with_fetches(monkeypatch, thor=lambda s, e: frame(list(range(40, 30, -1)) + list(range(10, 0, -1))))
+    out = tmp_path / "dashboard.json"
+    with pytest.raises(SystemExit, match="thor has no data for 21 days"):
+        build_data.main(["--out", str(out)])
+    assert not out.exists()
+
+
+def test_a_level_series_that_goes_negative_writes_nothing(tmp_path, monkeypatch):
+    with_fetches(monkeypatch, exports=lambda s, e: frame([60, 30, 1], value=-1.0))
+    out = tmp_path / "dashboard.json"
+    with pytest.raises(SystemExit, match='exports has values at or below zero.*change="diff"'):
+        build_data.main(["--out", str(out)])
+    assert not out.exists()
+
+
+def short_statistics_api(url, params, headers):
+    """Answers like BOT Statistics did: a long daily request comes back with only its first 183 days."""
+    a = date.fromisoformat(params["start_period"])
+    b = min(date.fromisoformat(params["end_period"]), a + timedelta(days=182))
+    days = pd.bdate_range(a, b)
+    return Reply({"result": {"series": [{"observations": [
+        {"period_start": d.date().isoformat(), "value": "1.0"} for d in days]}]}})
+
+
+def test_daily_statistics_survive_an_api_that_cuts_long_requests_short(monkeypatch, tmp_path):
+    monkeypatch.setenv(bot_api.STATISTICS_TOKEN, "test-token")
+    monkeypatch.setattr(bot_api, "http_get", short_statistics_api)
+    thor = next(s for s in series.SERIES if s.id == "thor")
+    out = tmp_path / "dashboard.json"
+    with_fetches(monkeypatch, thor=lambda st, e: bot_api.statistic("X", st, e))
+    with pytest.raises(SystemExit, match="newest thor value"):
+        build_data.main(["--out", str(out)])
+    with_fetches(monkeypatch, thor=thor.fetch)
+    build_data.main(["--out", str(out)])
+    assert out.exists()
+
+
+def test_periods_cover_the_range_back_to_back():
+    p = bot_api.periods(date(2026, 1, 1), date(2026, 3, 15), 31)
+    assert p[0][0] == date(2026, 1, 1) and p[-1][1] == date(2026, 3, 15)
+    assert all((b - a).days < 31 for a, b in p)
+    assert all(nxt[0] - prev[1] == timedelta(days=1) for prev, nxt in zip(p, p[1:]))
+    assert bot_api.periods(date(2026, 1, 1), date(2026, 3, 15), None) == [(date(2026, 1, 1), date(2026, 3, 15))]
 
 
 def test_bot_statistic_with_no_observations_stops_the_build(monkeypatch, tmp_path):

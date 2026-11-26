@@ -25,6 +25,9 @@ ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUT = ROOT / "web" / "public" / "data" / "dashboard.json"
 YEARS = 3
 BANGKOK = timezone(timedelta(hours=7))
+# The widest gap between two points that real data has. Thai holidays leave up to a week without
+# exchange rates. A wider gap means a request came back short, as BOT Statistics did once.
+MAX_GAP_DAYS = {"daily": 14, "monthly": 62}
 
 
 def fetch_real(series: Series, start: date, end: date) -> pd.DataFrame:
@@ -39,6 +42,17 @@ def fetch_real(series: Series, start: date, end: date) -> pd.DataFrame:
     if series.max_age_days is not None and (end - latest).days > series.max_age_days:
         sys.exit(f"The newest {series.id} value is from {latest}, more than {series.max_age_days} days ago. "
                  "Nothing was written.")
+    if series.frequency in MAX_GAP_DAYS:
+        dates = df.loc[df["date"] >= pd.Timestamp(start), "date"].sort_values()
+        gaps = dates.diff()
+        if len(gaps) > 1 and gaps.max().days > MAX_GAP_DAYS[series.frequency]:
+            after = dates[gaps.idxmax()].date()
+            sys.exit(f"{series.id} has no data for {gaps.max().days} days before {after}, more than the "
+                     f"{MAX_GAP_DAYS[series.frequency]} a {series.frequency} series allows. A request may have come back "
+                     "short. Fetch BOT ranges through bot_api.periods(). Nothing was written.")
+    if series.change == "pct" and (df["value"] <= 0).any():
+        sys.exit(f"{series.id} has values at or below zero, so a percent change means nothing. "
+                 "Set change=\"diff\" in src/series.py. Nothing was written.")
     return df
 
 
