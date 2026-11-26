@@ -44,6 +44,7 @@ jobs:
       - run: pip install -r requirements.txt
       - run: python src/build_data.py
         env:
+          BOT_TOKEN_STATISTICS: ${{ secrets.BOT_API_TOKEN }}     # app subscribed to Statistics
           BOT_TOKEN_EXCHANGE: ${{ secrets.BOT_API_TOKEN_3 }}   # app subscribed to Exchange Rates
           BOT_TOKEN_POLICY: ${{ secrets.BOT_API_TOKEN_2 }}     # app subscribed to Policy Rate
       - run: npm ci && npm run build

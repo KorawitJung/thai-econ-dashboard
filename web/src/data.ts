@@ -1,6 +1,8 @@
 export type Lang = 'th' | 'en'
 export type Text = Record<Lang, string>
 export type Frequency = 'daily' | 'monthly' | 'event'
+/** 'pct': percent change of a level. 'diff': plain difference, for rates and balances. */
+export type ChangeKind = 'pct' | 'diff'
 export type Point = readonly [date: string, value: number]
 
 export interface Series {
@@ -11,10 +13,17 @@ export interface Series {
   unit: string
   decimals: number
   frequency: Frequency
+  change: ChangeKind
   source: Text
   points: Point[]
-  /** Event series only: YYYY-MM-DD of the latest decision meeting, even one that left the rate unchanged. */
-  lastMeeting?: string
+  /** Event series only: the latest decision meeting, even one that left the rate unchanged. */
+  meeting?: Meeting
+}
+
+export interface Meeting {
+  /** YYYY-MM-DD */
+  date: string
+  decision: Text
 }
 
 export interface Group {
@@ -57,6 +66,7 @@ function text(o: Obj, key: string, at: string): Text {
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 const FREQUENCIES: readonly Frequency[] = ['daily', 'monthly', 'event']
+const CHANGES: readonly ChangeKind[] = ['pct', 'diff']
 
 function point(x: unknown, at: string): Point {
   if (!Array.isArray(x) || x.length !== 2) throw new DataError(`${at} is not a [date, value] pair`)
@@ -70,6 +80,8 @@ function series(x: unknown, at: string, groupIds: Set<string>): Series {
   const o = obj(x, at)
   const frequency = str(o, 'frequency', at)
   if (!FREQUENCIES.includes(frequency as Frequency)) throw new DataError(`${at}.frequency "${frequency}" is unknown`)
+  const change = str(o, 'change', at)
+  if (!CHANGES.includes(change as ChangeKind)) throw new DataError(`${at}.change "${change}" is unknown`)
   const group = str(o, 'group', at)
   if (!groupIds.has(group)) throw new DataError(`${at}.group "${group}" is not in groups`)
   const decimals = o.decimals
@@ -79,15 +91,18 @@ function series(x: unknown, at: string, groupIds: Set<string>): Series {
   for (let i = 1; i < points.length; i++) {
     if (points[i]![0] <= points[i - 1]![0]) throw new DataError(`${at}.points[${i}] is not after the point before it`)
   }
-  let lastMeeting: string | undefined
-  if (o.lastMeeting !== undefined) {
-    lastMeeting = str(o, 'lastMeeting', at)
-    if (!ISO_DATE.test(lastMeeting)) throw new DataError(`${at}.lastMeeting is not a YYYY-MM-DD date`)
+  let meeting: Meeting | undefined
+  if (o.meeting !== undefined) {
+    const m = obj(o.meeting, `${at}.meeting`)
+    const date = str(m, 'date', `${at}.meeting`)
+    if (!ISO_DATE.test(date)) throw new DataError(`${at}.meeting.date is not a YYYY-MM-DD date`)
+    meeting = { date, decision: text(m, 'decision', `${at}.meeting`) }
   }
   return {
     id: str(o, 'id', at), group, name: text(o, 'name', at), sub: text(o, 'sub', at),
-    unit: str(o, 'unit', at), decimals, frequency: frequency as Frequency, source: text(o, 'source', at), points,
-    ...(lastMeeting && { lastMeeting }),
+    unit: str(o, 'unit', at), decimals, frequency: frequency as Frequency, change: change as ChangeKind,
+    source: text(o, 'source', at), points,
+    ...(meeting && { meeting }),
   }
 }
 

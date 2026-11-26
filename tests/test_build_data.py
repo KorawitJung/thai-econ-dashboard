@@ -18,11 +18,23 @@ def frame(days_ago: list[int], value: float = 1.0) -> pd.DataFrame:
     return pd.DataFrame({"date": pd.to_datetime([today - timedelta(days=d) for d in days_ago]), "value": value})
 
 
-def with_fetches(monkeypatch, meeting=lambda: date.today() - timedelta(days=20), **by_id):
+def a_meeting() -> bot_api.Meeting:
+    return bot_api.Meeting(date.today() - timedelta(days=20), "คงอัตรา", "Held the rate")
+
+
+def with_fetches(monkeypatch, meeting=a_meeting, **by_id):
     """Point every series at a local fetch so no test touches the network."""
     regs = [series.Series(**{**vars(s), "fetch": by_id.get(s.id, lambda st, e: frame([400, 30, 1])),
-                             "last_meeting": meeting if s.last_meeting else None}) for s in series.SERIES]
+                             "meeting": meeting if s.meeting else None}) for s in series.SERIES]
     monkeypatch.setattr(build_data, "SERIES", regs)
+
+
+class Reply:
+    def __init__(self, js):
+        self.js = js
+
+    def json(self):
+        return self.js
 
 
 def test_sample_writes_every_series_in_the_shape_the_app_reads(tmp_path):
@@ -36,6 +48,7 @@ def test_sample_writes_every_series_in_the_shape_the_app_reads(tmp_path):
         assert dates == sorted(dates), f"{s['id']} points are in date order"
         assert all(isinstance(p[1], float) for p in s["points"])
         assert s["group"] in {g["id"] for g in data["groups"]}
+        assert s["change"] in {"pct", "diff"}
 
 
 def test_a_failing_source_writes_nothing(tmp_path, monkeypatch):
@@ -82,51 +95,106 @@ def test_daily_policy_rate_keeps_only_decision_days(monkeypatch, tmp_path):
 
 def test_missing_bot_token_names_the_variable_and_writes_nothing(monkeypatch, tmp_path):
     monkeypatch.delenv(bot_api.EXCHANGE_TOKEN, raising=False)
-    with_fetches(monkeypatch, usd_thb=bot_api.usd_thb)
+    bot_api._mid_rates.cache_clear()
+    with_fetches(monkeypatch, usd_thb=lambda st, e: bot_api.mid_rate("USD", st, e))
     out = tmp_path / "dashboard.json"
     with pytest.raises(SystemExit, match=f"Could not get usd_thb: {bot_api.EXCHANGE_TOKEN} is not set"):
         build_data.main(["--out", str(out)])
     assert not out.exists()
 
 
-def test_bot_usd_thb_reads_mid_rates_oldest_first_and_skips_blank_days(monkeypatch):
-    class Reply:
-        def json(self):
-            return {"result": {"data": {"data_detail": [
-                {"period": "2026-11-25", "mid_rate": "33.9925000"},
-                {"period": "2026-11-24", "mid_rate": ""},
-                {"period": "2026-11-23", "mid_rate": "33.9000000"},
-            ]}}}
-    monkeypatch.setenv(bot_api.EXCHANGE_TOKEN, "test-token")
-    monkeypatch.setattr(bot_api, "http_get", lambda url, params, headers: Reply())
-    df = bot_api.usd_thb(date(2026, 11, 20), date(2026, 11, 25))
-    assert [d.date().isoformat() for d in df["date"]] == ["2026-11-23", "2026-11-25"]
-    assert df["value"].tolist() == [33.9, 33.9925]
+def test_bot_mid_rate_keeps_one_currency_oldest_first_and_skips_blank_days(monkeypatch):
+    rows = [
+        {"period": "2026-11-25", "currency_id": "USD", "mid_rate": "33.9925000"},
+        {"period": "2026-11-25", "currency_id": "JPY", "mid_rate": "21.3603000"},
+        {"period": "2026-11-24", "currency_id": "USD", "mid_rate": ""},
+        {"period": "2026-11-23", "currency_id": "USD ", "mid_rate": "33.9000000"},
+    ]
+    calls = []
 
-
-def test_bot_usd_thb_asks_for_at_most_31_days_at_a_time(monkeypatch):
-    periods = []
-    class Empty:
-        def json(self):
-            return {"result": {"data": {"data_detail": []}}}
     def fake(url, params, headers):
-        periods.append((date.fromisoformat(params["start_period"]), date.fromisoformat(params["end_period"])))
-        return Empty()
+        calls.append(params)
+        return Reply({"result": {"data": {"data_detail": rows}}})
     monkeypatch.setenv(bot_api.EXCHANGE_TOKEN, "test-token")
     monkeypatch.setattr(bot_api, "http_get", fake)
-    bot_api.usd_thb(date(2026, 1, 1), date(2026, 3, 15))
+    bot_api._mid_rates.cache_clear()
+    usd = bot_api.mid_rate("USD", date(2026, 11, 20), date(2026, 11, 25))
+    jpy = bot_api.mid_rate("JPY", date(2026, 11, 20), date(2026, 11, 25))
+    assert [d.date().isoformat() for d in usd["date"]] == ["2026-11-23", "2026-11-25"]
+    assert usd["value"].tolist() == [33.9, 33.9925]
+    assert jpy["value"].tolist() == [21.3603]
+    assert len(calls) == 1, "every currency comes from the same requests"
+    assert "currency" not in calls[0]
+
+
+def test_bot_mid_rates_ask_for_at_most_31_days_at_a_time(monkeypatch):
+    periods = []
+
+    def fake(url, params, headers):
+        periods.append((date.fromisoformat(params["start_period"]), date.fromisoformat(params["end_period"])))
+        return Reply({"result": {"data": {"data_detail": []}}})
+    monkeypatch.setenv(bot_api.EXCHANGE_TOKEN, "test-token")
+    monkeypatch.setattr(bot_api, "http_get", fake)
+    bot_api._mid_rates.cache_clear()
+    bot_api.mid_rate("USD", date(2026, 1, 1), date(2026, 3, 15))
     assert all((b - a).days < 31 for a, b in periods), "each request spans 31 days or fewer"
     assert periods[0][0] == date(2026, 1, 1) and periods[-1][1] == date(2026, 3, 15)
     assert all(nxt[0] - prev[1] == timedelta(days=1) for prev, nxt in zip(periods, periods[1:])), "no gaps or overlaps"
 
 
-def test_policy_rate_carries_the_last_meeting_date(monkeypatch, tmp_path):
-    with_fetches(monkeypatch, meeting=lambda: date(2026, 10, 28))
+def test_bot_statistic_dates_monthly_values_on_the_first_and_applies_the_scale(monkeypatch):
+    seen = {}
+
+    def fake(url, params, headers):
+        seen.update(params)
+        return Reply({"result": {"series": [{"series_code": "X", "observations": [
+            {"period_start": "2026-09", "value": "246322.7100000"},
+            {"period_start": "2026-08", "value": ""},
+            {"period_start": "2026-07", "value": "238090.1100000"},
+        ]}]}})
+    monkeypatch.setenv(bot_api.STATISTICS_TOKEN, "test-token")
+    monkeypatch.setattr(bot_api, "http_get", fake)
+    df = bot_api.statistic("X", date(2026, 1, 1), date(2026, 11, 26), scale=1e-3)
+    assert [d.date().isoformat() for d in df["date"]] == ["2026-07-01", "2026-09-01"]
+    assert df["value"].round(5).tolist() == [238.09011, 246.32271]
+    assert seen == {"series_code": "X", "start_period": "2026-01-01", "end_period": "2026-11-26"}
+
+
+def test_daily_statistics_are_asked_for_a_quarter_at_a_time(monkeypatch):
+    periods = []
+
+    def fake(url, params, headers):
+        a, b = date.fromisoformat(params["start_period"]), date.fromisoformat(params["end_period"])
+        periods.append((a, b))
+        return Reply({"result": {"series": [{"observations": [{"period_start": b.isoformat(), "value": "1.0"}]}]}})
+    monkeypatch.setenv(bot_api.STATISTICS_TOKEN, "test-token")
+    monkeypatch.setattr(bot_api, "http_get", fake)
+    thor = next(s for s in series.SERIES if s.id == "thor")
+    df = thor.fetch(date(2023, 11, 27), date(2026, 11, 26))
+    assert all((b - a).days < bot_api.DAILY_CHUNK_DAYS for a, b in periods)
+    assert periods[0][0] == date(2023, 11, 27) and periods[-1][1] == date(2026, 11, 26)
+    assert all(nxt[0] - prev[1] == timedelta(days=1) for prev, nxt in zip(periods, periods[1:])), "no gaps or overlaps"
+    assert len(df) == len(periods), "rows from every chunk are kept"
+
+
+def test_bot_statistic_with_no_observations_stops_the_build(monkeypatch, tmp_path):
+    monkeypatch.setenv(bot_api.STATISTICS_TOKEN, "test-token")
+    monkeypatch.setattr(bot_api, "http_get", lambda url, params, headers: Reply({"result": {"series": []}}))
+    with_fetches(monkeypatch, reserves=lambda st, e: bot_api.statistic("X", st, e))
+    out = tmp_path / "dashboard.json"
+    with pytest.raises(SystemExit, match="no data for reserves"):
+        build_data.main(["--out", str(out)])
+    assert not out.exists()
+
+
+def test_policy_rate_carries_the_last_meeting(monkeypatch, tmp_path):
+    with_fetches(monkeypatch, meeting=lambda: bot_api.Meeting(date(2026, 10, 28), "คงอัตราไว้ที่ร้อยละ 1.00", "Held at 1.00 percent"))
     out = tmp_path / "dashboard.json"
     build_data.main(["--out", str(out)])
     by_id = {s["id"]: s for s in json.loads(out.read_text(encoding="utf-8"))["series"]}
-    assert by_id["policy_rate"]["lastMeeting"] == "2026-10-28"
-    assert "lastMeeting" not in by_id["usd_thb"]
+    assert by_id["policy_rate"]["meeting"] == {
+        "date": "2026-10-28", "decision": {"th": "คงอัตราไว้ที่ร้อยละ 1.00", "en": "Held at 1.00 percent"}}
+    assert "meeting" not in by_id["usd_thb"]
 
 
 def test_failing_meeting_source_writes_nothing(monkeypatch, tmp_path):
@@ -139,15 +207,16 @@ def test_failing_meeting_source_writes_nothing(monkeypatch, tmp_path):
     assert not out.exists()
 
 
-def test_bot_meeting_date_is_read_from_the_announcement(monkeypatch):
-    class Reply:
-        def __init__(self, raw):
-            self.raw = raw
-        def json(self):
-            return {"result": {"data": "1.00", "announcement_date": self.raw}}
+def test_bot_meeting_is_read_from_the_announcement(monkeypatch):
+    def answer(day, th=" คงอัตรา ", en="Held"):
+        reply = Reply({"result": {"data": "1.00", "announcement_date": day, "news_text_th": th, "news_text_en": en}})
+        monkeypatch.setattr(bot_api, "http_get", lambda url, params, headers: reply)
     monkeypatch.setenv(bot_api.POLICY_TOKEN, "test-token")
-    monkeypatch.setattr(bot_api, "http_get", lambda url, params, headers: Reply("2026/10/28"))
-    assert bot_api.last_policy_meeting() == date(2026, 10, 28)
-    monkeypatch.setattr(bot_api, "http_get", lambda url, params, headers: Reply("28 Oct 2026"))
+    answer("2026/10/28")
+    assert bot_api.last_policy_meeting() == bot_api.Meeting(date(2026, 10, 28), "คงอัตรา", "Held")
+    answer("28 Oct 2026")
     with pytest.raises(SourceError, match="expected YYYY/MM/DD"):
+        bot_api.last_policy_meeting()
+    answer("2026/10/28", th="")
+    with pytest.raises(SourceError, match="no decision text"):
         bot_api.last_policy_meeting()

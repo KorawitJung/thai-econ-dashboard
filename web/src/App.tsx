@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import { Detail } from './components/Detail'
 import { Overview } from './components/Overview'
 import type { Dashboard, Lang } from './data'
@@ -25,11 +25,19 @@ function storedLang(): Lang {
 
 const selectedFromHash = () => decodeURIComponent(location.hash.slice(1))
 
+/** iPad portrait and wider: list and detail side by side, like Stocks on iPad. */
+const SPLIT = window.matchMedia('(min-width: 700px)')
+const subscribeSplit = (cb: () => void) => {
+  SPLIT.addEventListener('change', cb)
+  return () => SPLIT.removeEventListener('change', cb)
+}
+
 export function App() {
   const [load, setLoad] = useState<Load>({ status: 'loading' })
   const [lang, setLang] = useState<Lang>(storedLang)
   const [selected, setSelected] = useState(selectedFromHash)
   const [range, setRange] = useState<Range>('1Y')
+  const split = useSyncExternalStore(subscribeSplit, () => SPLIT.matches)
   const t = STRINGS[lang]
 
   const fetchData = useCallback(() => {
@@ -90,10 +98,28 @@ export function App() {
       </div>
     )
   }
-  return series ? (
-    <Detail data={load.data} series={series} lang={lang} t={t} range={range} onRange={setRange}
-      onBack={() => { location.hash = '' }} langButton={langButton} />
-  ) : (
-    <Overview data={load.data} lang={lang} t={t} onOpen={(id) => { location.hash = id }} langButton={langButton} />
+  const open = (id: string) => { location.hash = id }
+  if (split) {
+    const shown = series ?? load.data.series[0]!
+    return (
+      <div className="split">
+        <nav className="sidebar" aria-label={t.indicators}>
+          <Overview data={load.data} lang={lang} t={t} onOpen={open} langButton={langButton} selected={shown.id} />
+        </nav>
+        <main className="pane" key={shown.id}>
+          <Detail data={load.data} series={shown} lang={lang} t={t} range={range} onRange={setRange} />
+        </main>
+      </div>
+    )
+  }
+  return (
+    <main>
+      {series ? (
+        <Detail data={load.data} series={series} lang={lang} t={t} range={range} onRange={setRange}
+          onBack={() => { location.hash = '' }} langButton={langButton} />
+      ) : (
+        <Overview data={load.data} lang={lang} t={t} onOpen={open} langButton={langButton} />
+      )}
+    </main>
   )
 }
