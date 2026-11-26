@@ -17,7 +17,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent))
 import sample_data  # noqa: E402
-from series import GROUPS, SERIES, Series  # noqa: E402
+from series import GROUPS, MONTHLY_MAX_AGE, SERIES, Series  # noqa: E402
 from bot_api import Meeting  # noqa: E402
 from sources import SourceError  # noqa: E402
 
@@ -82,7 +82,9 @@ def points(series: Series, df: pd.DataFrame, start: date, end: date) -> list[lis
 
 
 def build(sample: bool, today: date) -> dict:
-    start = today - timedelta(days=365 * YEARS)
+    # The page's widest range is 3Y back from each series' newest point, and a monthly point may be
+    # MONTHLY_MAX_AGE days old, so keep that much more history.
+    start = today - timedelta(days=365 * YEARS + MONTHLY_MAX_AGE)
     out = []
     for s in SERIES:
         df = sample_data.make(s, start, today) if sample else fetch_real(s, start, today)

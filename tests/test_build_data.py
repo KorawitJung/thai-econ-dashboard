@@ -24,7 +24,7 @@ def a_meeting() -> bot_api.Meeting:
 
 def with_fetches(monkeypatch, meeting=a_meeting, **by_id):
     """Point every series at a local fetch so no test touches the network."""
-    weekly = list(range(1100, 0, -7))  # three years of points a week apart, the newest yesterday
+    weekly = list(range(1255, 0, -7))  # the build window in points a week apart, the newest yesterday
     regs = [series.Series(**{**vars(s), "fetch": by_id.get(s.id, lambda st, e: frame(weekly)),
                              "meeting": meeting if s.meeting else None}) for s in series.SERIES]
     monkeypatch.setattr(build_data, "SERIES", regs)
@@ -310,3 +310,13 @@ def test_the_deploy_check_refuses_sample_data_and_passes_live_data(tmp_path, mon
     with_fetches(monkeypatch)
     build_data.main(["--out", str(out)])
     check_live.main([str(out)])
+
+
+def test_a_lagging_monthly_series_still_has_three_years_behind_its_newest_point(tmp_path, monkeypatch):
+    months = pd.date_range(date.today() - timedelta(days=1400), date.today() - timedelta(days=60), freq="MS")
+    with_fetches(monkeypatch, cpi_yoy=lambda st, e: pd.DataFrame({"date": months, "value": 1.0}))
+    out = tmp_path / "dashboard.json"
+    build_data.main(["--out", str(out)])
+    cpi = next(s for s in json.loads(out.read_text(encoding="utf-8"))["series"] if s["id"] == "cpi_yoy")
+    first, newest = date.fromisoformat(cpi["points"][0][0]), date.fromisoformat(cpi["points"][-1][0])
+    assert (newest - first).days >= 3 * 365, "the 3Y range on the page has three years to show"

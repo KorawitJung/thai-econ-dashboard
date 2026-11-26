@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import type { Dashboard, Lang, Series } from '../data'
 import type { Range } from '../derive'
-import { RANGES, direction, formatChange, formatValue, geometry, last, latestChange, rangeChange, windowed } from '../derive'
+import { RANGES, coversRange, direction, formatChange, formatValue, geometry, last, latestChange, rangeChange, windowed } from '../derive'
 import type { Strings } from '../i18n'
 import { formatDate } from '../i18n'
 
@@ -29,6 +29,7 @@ export function Detail({ data, series: s, lang, t, range, onRange, onBack, langB
   const move = latestChange(s)
   const group = data.groups.find((x) => x.id === s.group)
   const lastPoint = last(s)
+  const span = coversRange(s, pts, range) ? `${t.over} ${range}` : `${t.since} ${formatDate(pts[0]![0], lang)}`
   return (
     <div className="screen">
       {onBack && (
@@ -47,7 +48,7 @@ export function Detail({ data, series: s, lang, t, range, onRange, onBack, langB
       </header>
       <div className="headline">
         <span className="big">{formatValue(s, lastPoint[1])}</span>
-        <span className={`fg-${tone}`}>{formatChange(ch)} {t.over} {range}</span>
+        <span className={`fg-${tone}`}>{formatChange(ch)} {span}</span>
       </div>
       <div className="segmented" role="group" aria-label={t.range}>
         {(Object.keys(RANGES) as Range[]).map((r) => (
@@ -55,7 +56,7 @@ export function Detail({ data, series: s, lang, t, range, onRange, onBack, langB
         ))}
       </div>
       <svg className="chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img"
-        aria-label={`${s.name[lang]} ${formatChange(ch)} ${t.over} ${range}`}>
+        aria-label={`${s.name[lang]} ${formatChange(ch)} ${span}`}>
         <line className="baseline" x1="0" x2={W} y1={g.baseY} y2={g.baseY} />
         <polygon className={`area fill-${tone}`} points={g.area} />
         <polyline className={`stroke-${tone}`} points={g.line} />

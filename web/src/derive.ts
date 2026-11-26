@@ -43,6 +43,14 @@ export function windowed(s: Series, range: Range): Point[] {
   return inside.length >= 2 ? inside : s.points.slice(-2)
 }
 
+// How far after the range start a series' first point can fall and still count as covering it.
+const SLACK_DAYS = { daily: 7, monthly: 31, event: 0 } as const
+
+/** False when the series starts after the range does, so "over 3Y" would claim more history than there is. */
+export function coversRange(s: Series, pts: Point[], range: Range): boolean {
+  return time(pts[0]![0]) - time(shift(last(s)[0], RANGES[range])) <= SLACK_DAYS[s.frequency] * DAY
+}
+
 export function sparkPoints(s: Series): Point[] {
   if (s.frequency === 'daily') return s.points.slice(-30)
   if (s.frequency === 'monthly') return s.points.slice(-12)
