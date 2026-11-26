@@ -299,3 +299,14 @@ def test_bis_policy_rate_starts_two_years_early_even_from_a_leap_day(monkeypatch
     monkeypatch.setattr(sources, "http_get", fake)
     sources.bis_policy_rate(date(2028, 2, 29), date(2031, 2, 28))
     assert asked["startPeriod"] <= "2026-02-28"
+
+
+def test_the_deploy_check_refuses_sample_data_and_passes_live_data(tmp_path, monkeypatch):
+    import check_live
+    out = tmp_path / "dashboard.json"
+    build_data.main(["--sample", "--out", str(out)])
+    with pytest.raises(SystemExit, match="holds 'sample' data. Only live data is published"):
+        check_live.main([str(out)])
+    with_fetches(monkeypatch)
+    build_data.main(["--out", str(out)])
+    check_live.main([str(out)])
