@@ -76,6 +76,17 @@ describe('parseDashboard', () => {
     bad.series[0]!.points.reverse()
     expect(() => parseDashboard(bad)).toThrow(/is not after the point before it/)
   })
+
+  it('keeps the last meeting date when a series has one, and leaves it out otherwise', () => {
+    const withMeeting = { ...good, series: [{ ...good.series[0]!, lastMeeting: '2026-10-28' }] }
+    expect(parseDashboard(withMeeting).series[0]!.lastMeeting).toBe('2026-10-28')
+    expect(parseDashboard(good).series[0]).not.toHaveProperty('lastMeeting')
+  })
+
+  it('rejects a last meeting date that is not YYYY-MM-DD', () => {
+    const bad = { ...good, series: [{ ...good.series[0]!, lastMeeting: '2026/10/28' }] }
+    expect(() => parseDashboard(bad)).toThrow(new DataError('data.series[0].lastMeeting is not a YYYY-MM-DD date'))
+  })
 })
 
 describe('parseDashboard source', () => {

@@ -13,6 +13,8 @@ export interface Series {
   frequency: Frequency
   source: Text
   points: Point[]
+  /** Event series only: YYYY-MM-DD of the latest decision meeting, even one that left the rate unchanged. */
+  lastMeeting?: string
 }
 
 export interface Group {
@@ -77,9 +79,15 @@ function series(x: unknown, at: string, groupIds: Set<string>): Series {
   for (let i = 1; i < points.length; i++) {
     if (points[i]![0] <= points[i - 1]![0]) throw new DataError(`${at}.points[${i}] is not after the point before it`)
   }
+  let lastMeeting: string | undefined
+  if (o.lastMeeting !== undefined) {
+    lastMeeting = str(o, 'lastMeeting', at)
+    if (!ISO_DATE.test(lastMeeting)) throw new DataError(`${at}.lastMeeting is not a YYYY-MM-DD date`)
+  }
   return {
     id: str(o, 'id', at), group, name: text(o, 'name', at), sub: text(o, 'sub', at),
     unit: str(o, 'unit', at), decimals, frequency: frequency as Frequency, source: text(o, 'source', at), points,
+    ...(lastMeeting && { lastMeeting }),
   }
 }
 

@@ -18,9 +18,10 @@ def frame(days_ago: list[int], value: float = 1.0) -> pd.DataFrame:
     return pd.DataFrame({"date": pd.to_datetime([today - timedelta(days=d) for d in days_ago]), "value": value})
 
 
-def with_fetches(monkeypatch, **by_id):
+def with_fetches(monkeypatch, meeting=lambda: date.today() - timedelta(days=20), **by_id):
     """Point every series at a local fetch so no test touches the network."""
-    regs = [series.Series(**{**vars(s), "fetch": by_id.get(s.id, lambda st, e: frame([400, 30, 1]))}) for s in series.SERIES]
+    regs = [series.Series(**{**vars(s), "fetch": by_id.get(s.id, lambda st, e: frame([400, 30, 1])),
+                             "last_meeting": meeting if s.last_meeting else None}) for s in series.SERIES]
     monkeypatch.setattr(build_data, "SERIES", regs)
 
 
@@ -117,3 +118,36 @@ def test_bot_usd_thb_asks_for_at_most_31_days_at_a_time(monkeypatch):
     assert all((b - a).days < 31 for a, b in periods), "each request spans 31 days or fewer"
     assert periods[0][0] == date(2026, 1, 1) and periods[-1][1] == date(2026, 3, 15)
     assert all(nxt[0] - prev[1] == timedelta(days=1) for prev, nxt in zip(periods, periods[1:])), "no gaps or overlaps"
+
+
+def test_policy_rate_carries_the_last_meeting_date(monkeypatch, tmp_path):
+    with_fetches(monkeypatch, meeting=lambda: date(2026, 10, 28))
+    out = tmp_path / "dashboard.json"
+    build_data.main(["--out", str(out)])
+    by_id = {s["id"]: s for s in json.loads(out.read_text(encoding="utf-8"))["series"]}
+    assert by_id["policy_rate"]["lastMeeting"] == "2026-10-28"
+    assert "lastMeeting" not in by_id["usd_thb"]
+
+
+def test_failing_meeting_source_writes_nothing(monkeypatch, tmp_path):
+    def down():
+        raise SourceError("HTTP 403")
+    with_fetches(monkeypatch, meeting=down)
+    out = tmp_path / "dashboard.json"
+    with pytest.raises(SystemExit, match="Could not get the last meeting for policy_rate: HTTP 403"):
+        build_data.main(["--out", str(out)])
+    assert not out.exists()
+
+
+def test_bot_meeting_date_is_read_from_the_announcement(monkeypatch):
+    class Reply:
+        def __init__(self, raw):
+            self.raw = raw
+        def json(self):
+            return {"result": {"data": "1.00", "announcement_date": self.raw}}
+    monkeypatch.setenv(bot_api.POLICY_TOKEN, "test-token")
+    monkeypatch.setattr(bot_api, "http_get", lambda url, params, headers: Reply("2026/10/28"))
+    assert bot_api.last_policy_meeting() == date(2026, 10, 28)
+    monkeypatch.setattr(bot_api, "http_get", lambda url, params, headers: Reply("28 Oct 2026"))
+    with pytest.raises(SourceError, match="expected YYYY/MM/DD"):
+        bot_api.last_policy_meeting()
