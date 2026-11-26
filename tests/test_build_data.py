@@ -220,3 +220,18 @@ def test_bot_meeting_is_read_from_the_announcement(monkeypatch):
     answer("2026/10/28", th="")
     with pytest.raises(SourceError, match="no decision text"):
         bot_api.last_policy_meeting()
+
+
+def test_bis_policy_rate_starts_two_years_early_even_from_a_leap_day(monkeypatch):
+    import sources
+    asked = {}
+
+    class Csv:
+        text = "TIME_PERIOD,OBS_VALUE\n2026-01-02,1.0\n"
+
+    def fake(url, params, headers=None):
+        asked.update(params)
+        return Csv()
+    monkeypatch.setattr(sources, "http_get", fake)
+    sources.bis_policy_rate(date(2028, 2, 29), date(2031, 2, 28))
+    assert asked["startPeriod"] <= "2026-02-28"
