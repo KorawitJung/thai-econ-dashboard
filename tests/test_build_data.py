@@ -19,12 +19,13 @@ def frame(days_ago: list[int], value: float = 1.0) -> pd.DataFrame:
 
 
 def a_meeting() -> bot_api.Meeting:
-    return bot_api.Meeting(date.today() - timedelta(days=20), "คงอัตรา", "Held the rate")
+    return bot_api.Meeting(date.today() - timedelta(days=20), 1.0, "คงอัตรา", "Held the rate")
 
 
 def with_fetches(monkeypatch, meeting=a_meeting, **by_id):
     """Point every series at a local fetch so no test touches the network."""
-    regs = [series.Series(**{**vars(s), "fetch": by_id.get(s.id, lambda st, e: frame([400, 30, 1])),
+    weekly = list(range(1255, 0, -7))  # the build window in points a week apart, the newest yesterday
+    regs = [series.Series(**{**vars(s), "fetch": by_id.get(s.id, lambda st, e: frame(weekly)),
                              "meeting": meeting if s.meeting else None}) for s in series.SERIES]
     monkeypatch.setattr(build_data, "SERIES", regs)
 
@@ -177,6 +178,52 @@ def test_daily_statistics_are_asked_for_a_quarter_at_a_time(monkeypatch):
     assert len(df) == len(periods), "rows from every chunk are kept"
 
 
+def test_a_hole_inside_a_daily_series_writes_nothing(tmp_path, monkeypatch):
+    with_fetches(monkeypatch, thor=lambda s, e: frame(list(range(40, 30, -1)) + list(range(10, 0, -1))))
+    out = tmp_path / "dashboard.json"
+    with pytest.raises(SystemExit, match="thor has no data for 21 days"):
+        build_data.main(["--out", str(out)])
+    assert not out.exists()
+
+
+def test_a_level_series_that_goes_negative_writes_nothing(tmp_path, monkeypatch):
+    with_fetches(monkeypatch, exports=lambda s, e: frame([60, 30, 1], value=-1.0))
+    out = tmp_path / "dashboard.json"
+    with pytest.raises(SystemExit, match='exports has values at or below zero.*change="diff"'):
+        build_data.main(["--out", str(out)])
+    assert not out.exists()
+
+
+def short_statistics_api(url, params, headers):
+    """Answers like BOT Statistics did: a long daily request comes back with only its first 183 days."""
+    a = date.fromisoformat(params["start_period"])
+    b = min(date.fromisoformat(params["end_period"]), a + timedelta(days=182))
+    days = pd.bdate_range(a, b)
+    return Reply({"result": {"series": [{"observations": [
+        {"period_start": d.date().isoformat(), "value": "1.0"} for d in days]}]}})
+
+
+def test_daily_statistics_survive_an_api_that_cuts_long_requests_short(monkeypatch, tmp_path):
+    monkeypatch.setenv(bot_api.STATISTICS_TOKEN, "test-token")
+    monkeypatch.setattr(bot_api, "http_get", short_statistics_api)
+    thor = next(s for s in series.SERIES if s.id == "thor")
+    out = tmp_path / "dashboard.json"
+    with_fetches(monkeypatch, thor=lambda st, e: bot_api.statistic("X", st, e))
+    with pytest.raises(SystemExit, match="newest thor value"):
+        build_data.main(["--out", str(out)])
+    with_fetches(monkeypatch, thor=thor.fetch)
+    build_data.main(["--out", str(out)])
+    assert out.exists()
+
+
+def test_periods_cover_the_range_back_to_back():
+    p = bot_api.periods(date(2026, 1, 1), date(2026, 3, 15), 31)
+    assert p[0][0] == date(2026, 1, 1) and p[-1][1] == date(2026, 3, 15)
+    assert all((b - a).days < 31 for a, b in p)
+    assert all(nxt[0] - prev[1] == timedelta(days=1) for prev, nxt in zip(p, p[1:]))
+    assert bot_api.periods(date(2026, 1, 1), date(2026, 3, 15), None) == [(date(2026, 1, 1), date(2026, 3, 15))]
+
+
 def test_bot_statistic_with_no_observations_stops_the_build(monkeypatch, tmp_path):
     monkeypatch.setenv(bot_api.STATISTICS_TOKEN, "test-token")
     monkeypatch.setattr(bot_api, "http_get", lambda url, params, headers: Reply({"result": {"series": []}}))
@@ -188,7 +235,7 @@ def test_bot_statistic_with_no_observations_stops_the_build(monkeypatch, tmp_pat
 
 
 def test_policy_rate_carries_the_last_meeting(monkeypatch, tmp_path):
-    with_fetches(monkeypatch, meeting=lambda: bot_api.Meeting(date(2026, 10, 28), "คงอัตราไว้ที่ร้อยละ 1.00", "Held at 1.00 percent"))
+    with_fetches(monkeypatch, meeting=lambda: bot_api.Meeting(date(2026, 10, 28), 1.0, "คงอัตราไว้ที่ร้อยละ 1.00", "Held at 1.00 percent"))
     out = tmp_path / "dashboard.json"
     build_data.main(["--out", str(out)])
     by_id = {s["id"]: s for s in json.loads(out.read_text(encoding="utf-8"))["series"]}
@@ -208,15 +255,68 @@ def test_failing_meeting_source_writes_nothing(monkeypatch, tmp_path):
 
 
 def test_bot_meeting_is_read_from_the_announcement(monkeypatch):
-    def answer(day, th=" คงอัตรา ", en="Held"):
-        reply = Reply({"result": {"data": "1.00", "announcement_date": day, "news_text_th": th, "news_text_en": en}})
+    def answer(day, th=" คงอัตรา ", en="Held", rate="1.00"):
+        reply = Reply({"result": {"data": rate, "announcement_date": day, "news_text_th": th, "news_text_en": en}})
         monkeypatch.setattr(bot_api, "http_get", lambda url, params, headers: reply)
+        bot_api.last_policy_meeting.cache_clear()
     monkeypatch.setenv(bot_api.POLICY_TOKEN, "test-token")
     answer("2026/10/28")
-    assert bot_api.last_policy_meeting() == bot_api.Meeting(date(2026, 10, 28), "คงอัตรา", "Held")
+    assert bot_api.last_policy_meeting() == bot_api.Meeting(date(2026, 10, 28), 1.0, "คงอัตรา", "Held")
     answer("28 Oct 2026")
     with pytest.raises(SourceError, match="expected YYYY/MM/DD"):
         bot_api.last_policy_meeting()
     answer("2026/10/28", th="")
     with pytest.raises(SourceError, match="no decision text"):
         bot_api.last_policy_meeting()
+    answer("2026/10/28", rate="")
+    with pytest.raises(SourceError, match="expected a number"):
+        bot_api.last_policy_meeting()
+
+
+def test_policy_rate_ends_with_bot_rate_when_bis_has_not_caught_up(monkeypatch, tmp_path):
+    cut = date.today() - timedelta(days=3)
+    bis = pd.DataFrame({"date": pd.date_range(date.today() - timedelta(days=500), date.today()), "value": 1.25})
+    monkeypatch.setattr(bot_api, "bis_policy_rate", lambda st, e: bis)
+    monkeypatch.setattr(bot_api, "last_policy_meeting", lambda: bot_api.Meeting(cut, 1.0, "ลด", "Cut"))
+    with_fetches(monkeypatch, meeting=bot_api.last_policy_meeting, policy_rate=bot_api.policy_rate)
+    out = tmp_path / "dashboard.json"
+    build_data.main(["--out", str(out)])
+    policy = next(s for s in json.loads(out.read_text(encoding="utf-8"))["series"] if s["id"] == "policy_rate")
+    assert [cut.isoformat(), 1.0] in policy["points"], "the cut shows on the day BOT announced it"
+    assert policy["points"][-1] == [date.today().isoformat(), 1.0], "today shows BOT's rate, not BIS's stale one"
+
+
+def test_bis_policy_rate_starts_two_years_early_even_from_a_leap_day(monkeypatch):
+    import sources
+    asked = {}
+
+    class Csv:
+        text = "TIME_PERIOD,OBS_VALUE\n2026-01-02,1.0\n"
+
+    def fake(url, params, headers=None):
+        asked.update(params)
+        return Csv()
+    monkeypatch.setattr(sources, "http_get", fake)
+    sources.bis_policy_rate(date(2028, 2, 29), date(2031, 2, 28))
+    assert asked["startPeriod"] <= "2026-02-28"
+
+
+def test_the_deploy_check_refuses_sample_data_and_passes_live_data(tmp_path, monkeypatch):
+    import check_live
+    out = tmp_path / "dashboard.json"
+    build_data.main(["--sample", "--out", str(out)])
+    with pytest.raises(SystemExit, match="holds 'sample' data. Only live data is published"):
+        check_live.main([str(out)])
+    with_fetches(monkeypatch)
+    build_data.main(["--out", str(out)])
+    check_live.main([str(out)])
+
+
+def test_a_lagging_monthly_series_still_has_three_years_behind_its_newest_point(tmp_path, monkeypatch):
+    months = pd.date_range(date.today() - timedelta(days=1400), date.today() - timedelta(days=60), freq="MS")
+    with_fetches(monkeypatch, cpi_yoy=lambda st, e: pd.DataFrame({"date": months, "value": 1.0}))
+    out = tmp_path / "dashboard.json"
+    build_data.main(["--out", str(out)])
+    cpi = next(s for s in json.loads(out.read_text(encoding="utf-8"))["series"] if s["id"] == "cpi_yoy")
+    first, newest = date.fromisoformat(cpi["points"][0][0]), date.fromisoformat(cpi["points"][-1][0])
+    assert (newest - first).days >= 3 * 365, "the 3Y range on the page has three years to show"

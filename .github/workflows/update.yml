@@ -49,6 +49,7 @@ jobs:
           BOT_TOKEN_POLICY: ${{ secrets.BOT_API_TOKEN_2 }}     # app subscribed to Policy Rate
       - run: npm ci && npm run build
         working-directory: web
+      - run: python src/check_live.py web/dist/data/dashboard.json
       - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
         with: {path: web/dist}
   deploy:

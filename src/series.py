@@ -83,8 +83,9 @@ SERIES = [
 
     Series("policy_rate", "rate", Text("ดอกเบี้ยนโยบาย", "Policy rate"), Text("กนง.", "MPC"),
            unit="%", decimals=2, frequency="event", max_age_days=None, change="diff",
-           source=Text("BIS จากข้อมูลของธนาคารแห่งประเทศไทย", "BIS, from Bank of Thailand data"),
-           fetch=sources.bis_policy_rate, meeting=bot_api.last_policy_meeting),
+           source=Text("BIS จากข้อมูลของธนาคารแห่งประเทศไทย และอัตราล่าสุดจากธนาคารแห่งประเทศไทย",
+                       "BIS from Bank of Thailand data, with the latest rate from the Bank of Thailand"),
+           fetch=bot_api.policy_rate, meeting=bot_api.last_policy_meeting),
     stat("thor", "rate", "FMRTTHORD00003", Text("ดอกเบี้ยข้ามคืน THOR", "THOR overnight rate"),
          Text("รายวัน", "daily"), unit="%", decimals=2, frequency="daily", change="diff"),
     stat("bond_10y", "rate", "FMRTINTM00296", Text("พันธบัตรรัฐบาล 10 ปี", "10-year government bond"),

@@ -5,7 +5,7 @@ The BIS Data Portal republishes the Bank of Thailand's policy rate and Thailand'
 from __future__ import annotations
 
 import io
-from datetime import date
+from datetime import date, timedelta
 
 import pandas as pd
 import requests
@@ -38,7 +38,8 @@ def _bis(flow: str, key: str, start: str) -> pd.DataFrame:
 
 def bis_policy_rate(start: date, end: date) -> pd.DataFrame:
     # Start two years early so the decision in force at `start` is in the data.
-    return _bis("WS_CBPOL", "D.TH", start.replace(year=start.year - 2).isoformat())
+    # Subtract days, not years: date.replace(year=...) fails when start is 29 February.
+    return _bis("WS_CBPOL", "D.TH", (start - timedelta(days=731)).isoformat())
 
 
 def bis_cpi_yoy(start: date, end: date) -> pd.DataFrame:

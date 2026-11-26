@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Point, Series } from './data'
 import { DataError, parseDashboard } from './data'
-import { direction, formatChange, geometry, latestChange, windowed } from './derive'
+import { coversRange, direction, formatChange, geometry, latestChange, windowed } from './derive'
 
 const base = { group: 'fx', name: { th: 'ก', en: 'A' }, sub: { th: 'ข', en: 'B' }, source: { th: 'ค', en: 'C' }, decimals: 2 }
 const mk = (over: Partial<Series> & { points: Point[] }): Series =>
@@ -49,6 +49,26 @@ describe('windowed', () => {
   it('drops daily points older than the range', () => {
     const s = mk({ points: [['2025-01-01', 1], ['2026-06-01', 2], ['2026-11-25', 3]] })
     expect(windowed(s, '6M').map(([d]) => d)).toEqual(['2026-06-01', '2026-11-25'])
+  })
+})
+
+describe('coversRange', () => {
+  const monthly = (from: number, to: number) =>
+    Array.from({ length: to - from + 1 }, (_, i): Point => {
+      const m = from + i
+      return [`${2023 + Math.floor((m - 1) / 12)}-${String(((m - 1) % 12) + 1).padStart(2, '0')}-01`, 2]
+    })
+
+  it('says a series that starts mid-window does not cover 3Y, so the page does not claim three years', () => {
+    const bond = mk({ frequency: 'monthly', change: 'diff', unit: '%', points: monthly(19, 46) })
+    expect(bond.points[0]![0]).toBe('2024-07-01')
+    expect(coversRange(bond, windowed(bond, '3Y'), '3Y')).toBe(false)
+    expect(coversRange(bond, windowed(bond, '1Y'), '1Y')).toBe(true)
+  })
+
+  it('counts a monthly series with three full years as covering 3Y', () => {
+    const cpi = mk({ frequency: 'monthly', points: monthly(1, 46) })
+    expect(coversRange(cpi, windowed(cpi, '3Y'), '3Y')).toBe(true)
   })
 })
 
