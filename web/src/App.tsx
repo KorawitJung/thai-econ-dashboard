@@ -25,7 +25,7 @@ function storedLang(): Lang {
 
 const selectedFromHash = () => decodeURIComponent(location.hash.slice(1))
 
-/** iPad portrait and wider: list and detail side by side, like Stocks on iPad. */
+/** At iPad portrait width and wider, the list and the detail show side by side, as in Stocks on iPad. */
 const SPLIT = window.matchMedia('(min-width: 700px)')
 const subscribeSplit = (cb: () => void) => {
   SPLIT.addEventListener('change', cb)

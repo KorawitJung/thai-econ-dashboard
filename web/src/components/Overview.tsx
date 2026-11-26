@@ -12,13 +12,13 @@ interface Props {
   t: Strings
   onOpen: (id: string) => void
   langButton: ReactNode
-  /** Split view: the series shown beside the list. */
+  /** In split view, the series shown beside the list. */
   selected?: string
 }
 
 export function Overview({ data, lang, t, onOpen, langButton, selected }: Props) {
   const current = useRef<HTMLButtonElement>(null)
-  // A shared link can open an indicator far down the list; keep its row in sight.
+  // A shared link can open an indicator far down the list, so scroll its row into view.
   useEffect(() => {
     current.current?.scrollIntoView({ block: 'nearest' })
   }, [selected])

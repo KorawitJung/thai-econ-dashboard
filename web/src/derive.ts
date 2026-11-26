@@ -20,7 +20,7 @@ function diff(s: Series, from: number, to: number): Change {
   return s.change === 'diff' ? { value: to - from, kind: 'diff' } : { value: (to / from - 1) * 100, kind: 'pct' }
 }
 
-/** The latest move: last point against the one before, or for a decision series, the last decision against the one it replaced. */
+/** The latest move is the last point against the one before. For a decision series it is the last decision against the one it replaced. */
 export function latestChange(s: Series): Change {
   const p = s.points
   if (s.frequency === 'event') {

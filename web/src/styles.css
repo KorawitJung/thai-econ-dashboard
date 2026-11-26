@@ -164,9 +164,9 @@ dd { margin: 0; font-weight: 600; }
 }
 .state p:first-child { color: var(--ink); font-weight: 600; }
 
-/* iPad and desktop: the list stays on the left and the chosen indicator fills the right. */
+/* On iPad and desktop the list stays on the left and the chosen indicator fills the right. */
 .split { display: grid; grid-template-columns: minmax(320px, 36%) minmax(0, 1fr); height: 100vh; height: 100dvh; }
-/* The big chart sits right beside the list, so a narrow sidebar gives the names the room instead. */
+/* The big chart is next to the list, so a narrow sidebar hides the small charts and gives the names more space. */
 @media (max-width: 999px) { .sidebar .spark { display: none; } }
 .sidebar, .pane { overflow-y: auto; overscroll-behavior: contain; }
 .sidebar { border-right: 0.5px solid var(--line); }
