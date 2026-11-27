@@ -1,9 +1,10 @@
-import type { ReactNode } from 'react'
+import { useEffect, useRef } from 'react'
 import type { Dashboard, Lang, Series } from '../data'
 import type { Range } from '../derive'
-import { RANGES, coversRange, direction, formatChange, formatValue, geometry, last, latestChange, rangeChange, windowed } from '../derive'
+import { coversRange, direction, formatChange, formatValue, last, latestChange, rangeChange, windowed } from '../derive'
 import type { Strings } from '../i18n'
 import { formatDate } from '../i18n'
+import { Chart } from './Chart'
 
 interface Props {
   data: Dashboard
@@ -11,75 +12,52 @@ interface Props {
   lang: Lang
   t: Strings
   range: Range
-  onRange: (r: Range) => void
-  /** Phone only. In split view the list stays beside the detail, so there is nothing to go back to. */
-  onBack?: () => void
-  langButton?: ReactNode
+  onClose: () => void
 }
 
-const W = 358
-const H = 220
+export function Detail({ data, series: s, lang, t, range, onClose }: Props) {
+  const card = useRef<HTMLElement>(null)
+  // A link such as #policy_rate opens a card that can sit far down the page.
+  useEffect(() => {
+    card.current?.scrollIntoView({ block: 'nearest' })
+  }, [])
 
-export function Detail({ data, series: s, lang, t, range, onRange, onBack, langButton }: Props) {
   const pts = windowed(s, range)
-  const ch = rangeChange(s, pts)
-  const tone = direction(ch)
-  const g = geometry(pts, W, H, 8, s.frequency === 'event')
-  const values = pts.map(([, v]) => v)
+  const change = rangeChange(s, pts)
   const move = latestChange(s)
-  const group = data.groups.find((x) => x.id === s.group)
-  const lastPoint = last(s)
+  const values = pts.map(([, v]) => v)
+  const group = data.groups.find((g) => g.id === s.group)
   const span = coversRange(s, pts, range) ? `${t.over} ${range}` : `${t.since} ${formatDate(pts[0]![0], lang)}`
   return (
-    <div className="screen">
-      {onBack && (
-        <div className="toolbar">
-          <button className="back" onClick={onBack}>
-            <svg width="12" height="20" viewBox="0 0 12 20" aria-hidden="true"><path d="M10 2 2 10l8 8" /></svg>
-            {t.back}
-          </button>
-          {langButton}
-        </div>
-      )}
-      <header className="detail-title">
-        {group && <p className={`eyebrow tint-${s.group}`}>{group.name[lang]}</p>}
-        <h1>{s.name[lang]}</h1>
-        <p className="meta">{s.sub[lang]}</p>
-      </header>
-      <div className="headline">
-        <span className="big">{formatValue(s, lastPoint[1])}</span>
-        <span className={`fg-${tone}`}>{formatChange(ch)} {span}</span>
-      </div>
-      <div className="segmented" role="group" aria-label={t.range}>
-        {(Object.keys(RANGES) as Range[]).map((r) => (
-          <button key={r} aria-pressed={r === range} onClick={() => onRange(r)}>{r}</button>
-        ))}
-      </div>
-      <svg className="chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img"
-        aria-label={`${s.name[lang]} ${formatChange(ch)} ${span}`}>
-        <line className="baseline" x1="0" x2={W} y1={g.baseY} y2={g.baseY} />
-        <polygon className={`area fill-${tone}`} points={g.area} />
-        <polyline className={`stroke-${tone}`} points={g.line} />
-      </svg>
-      <dl className="card stats">
-        <div><dt>{t.latest}</dt><dd>{formatValue(s, lastPoint[1])}</dd></div>
-        <div><dt>{t.lastMove}</dt><dd className={`fg-${direction(move)}`}>{formatChange(move)}</dd></div>
-        <div><dt>{t.high}</dt><dd>{formatValue(s, Math.max(...values))}</dd></div>
-        <div><dt>{t.low}</dt><dd>{formatValue(s, Math.min(...values))}</dd></div>
+    <article className={`card detail tint-${s.group}`} ref={card} aria-labelledby={`detail-${s.id}`}>
+      <button className="icon-btn close" aria-label={t.close} onClick={onClose}>
+        <svg className="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6 18 18M18 6 6 18" /></svg>
+      </button>
+      {group && <span className="tag">{group.name[lang]}</span>}
+      <h4 id={`detail-${s.id}`}>{s.name[lang]}</h4>
+      <p className="muted">{s.sub[lang]}</p>
+      <p className="headline">
+        <span className="num">{formatValue(s, last(s)[1])}</span>
+        <span className={`pill ${direction(change)}`}>{formatChange(change)} {span}</span>
+      </p>
+      <Chart points={pts} width={800} height={300} stepped={s.frequency === 'event'}
+        label={`${s.name[lang]} ${formatChange(change)} ${span}`} />
+      <dl className="statrow">
+        <div className="stat"><dt>{t.latest}</dt><dd>{formatValue(s, last(s)[1])}</dd></div>
+        <div className="stat"><dt>{t.lastMove}</dt><dd className={`fg-${direction(move)}`}>{formatChange(move)}</dd></div>
+        <div className="stat"><dt>{t.high}</dt><dd>{formatValue(s, Math.max(...values))}</dd></div>
+        <div className="stat"><dt>{t.low}</dt><dd>{formatValue(s, Math.min(...values))}</dd></div>
       </dl>
       {s.meeting && (
-        <section className="card meeting" aria-label={t.lastMeeting}>
-          <div className="info-row">
-            <span>{t.lastMeeting}</span>
-            <strong>{formatDate(s.meeting.date, lang)}</strong>
-          </div>
+        <section className="meeting" aria-label={t.lastMeeting}>
+          <p className="meeting-head"><span>{t.lastMeeting}</span><strong>{formatDate(s.meeting.date, lang)}</strong></p>
           <p className="decision">{s.meeting.decision[lang]}</p>
         </section>
       )}
-      <p className="footnote">
-        {t.asOf} {formatDate(lastPoint[0], lang)} · {data.source === 'sample' ? t.sampleSource : `${t.sourceLabel} ${s.source[lang]}`}
+      <p className="source">
+        {t.asOf} {formatDate(last(s)[0], lang)} · {data.source === 'sample' ? t.sampleSource : `${t.sourceLabel} ${s.source[lang]}`}
         {s.meeting && data.source !== 'sample' && ` · ${t.meetingSource}`}
       </p>
-    </div>
+    </article>
   )
 }

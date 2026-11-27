@@ -58,12 +58,6 @@ export function filterSeries(series: Series[], group: string, query: string): Se
     (q === '' || `${s.name.th} ${s.name.en} ${s.sub.th} ${s.sub.en} ${s.id}`.toLowerCase().includes(q)))
 }
 
-export function sparkPoints(s: Series): Point[] {
-  if (s.frequency === 'daily') return s.points.slice(-30)
-  if (s.frequency === 'monthly') return s.points.slice(-12)
-  return windowed(s, '1Y')
-}
-
 export function rangeChange(s: Series, pts: Point[]): Change {
   return diff(s, pts[0]![1], pts[pts.length - 1]![1])
 }
