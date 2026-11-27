@@ -77,6 +77,9 @@ def baht(entries: list[Entry]) -> tuple[str, str]:
     pct = (now / earlier[-1][1] - 1) * 100
     strong = pct < 0
     level, amount = value_of(usd, now), f"{abs(pct):.2f}"
+    if amount == "0.00":
+        return (f"ค่าเงินบาททรงตัวเทียบดอลลาร์ใน 7 วัน อยู่ที่ {level} บาท",
+                f"The baht held steady against the dollar over 7 days, at {level}.")
     return (f"ค่าเงินบาท{'แข็งค่า' if strong else 'อ่อนค่า'} {amount}% เทียบดอลลาร์ใน 7 วัน อยู่ที่ {level} บาท",
             f"The baht {'strengthened' if strong else 'weakened'} {amount}% against the dollar over 7 days, "
             f"to {level}.")
@@ -107,6 +110,10 @@ def biggest_mover(entries: list[Entry]) -> tuple[str, str]:
     day, now = pick["points"][-1]
     level, amount = value_of(pick, now), f"{abs(moved):.2f}" + ("%" if kind == "pct" else "")
     up = moved > 0
+    if amount.rstrip("%") == "0.00":
+        return (f"{pick['name']['th']} {thai_month(day)} อยู่ที่ {level}{unit_of(pick, 'th')} ไม่เปลี่ยนจากเดือนก่อน",
+                f"{pick['name']['en']} for {en_month(day)} was {level}{unit_of(pick, 'en')}, "
+                "unchanged from the month before.")
     return (f"{pick['name']['th']} {thai_month(day)} อยู่ที่ {level}{unit_of(pick, 'th')} "
             f"{'เพิ่มขึ้น' if up else 'ลดลง'} {amount} จากเดือนก่อน",
             f"{pick['name']['en']} for {en_month(day)} was {level}{unit_of(pick, 'en')}, "

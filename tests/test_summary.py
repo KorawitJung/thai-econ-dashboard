@@ -125,3 +125,17 @@ def test_groups_come_back_in_the_order_they_are_given_and_an_empty_group_is_skip
 def test_a_group_with_no_line_of_its_own_stops_the_build():
     with pytest.raises(summary.SummaryError, match="group crypto has no line in src/summary.py"):
         line("crypto", entry("btc", "crypto", [["2026-11-24", 1.0], ["2026-11-25", 2.0]]))
+
+
+def test_a_group_line_with_no_change_says_unchanged_not_down():
+    flat = entry("flat", "econ", [["2026-09-01", 45.2], ["2026-10-01", 45.2]], decimals=1,
+                 name={"th": "ความเชื่อมั่นภาคธุรกิจ", "en": "Business sentiment"})
+    got = line("econ", flat)
+    assert got["th"] == "ความเชื่อมั่นภาคธุรกิจ ต.ค. 2569 อยู่ที่ 45.2 ไม่เปลี่ยนจากเดือนก่อน"
+    assert got["en"] == "Business sentiment for Oct 2026 was 45.2, unchanged from the month before."
+
+
+def test_a_dollar_rate_that_did_not_move_reads_as_the_baht_holding_steady():
+    got = line("fx", usd([["2026-11-18", 34.0], ["2026-11-25", 34.0]]))
+    assert got["th"] == "ค่าเงินบาททรงตัวเทียบดอลลาร์ใน 7 วัน อยู่ที่ 34.00 บาท"
+    assert got["en"] == "The baht held steady against the dollar over 7 days, at 34.00."

@@ -73,6 +73,11 @@ describe('coversRange', () => {
 })
 
 describe('geometry', () => {
+  it('draws a series that never moved through the middle of the box, not along its floor', () => {
+    const g = geometry([['2026-01-01', 1], ['2026-06-01', 1]], 100, 50, 0, false)
+    expect(g.line).toBe('0.0,25.0 100.0,25.0')
+  })
+
   it('places points by date, so a gap in time is a gap on the chart', () => {
     const g = geometry([['2026-01-01', 1], ['2026-01-02', 2], ['2026-01-11', 3]], 100, 50, 0, false)
     const xs = g.line.split(' ').map((p) => Number(p.split(',')[0]))
