@@ -51,10 +51,11 @@ export function coversRange(s: Series, pts: Point[], range: Range): boolean {
   return time(pts[0]![0]) - time(shift(last(s)[0], RANGES[range])) <= SLACK_DAYS[s.frequency] * DAY
 }
 
-export function sparkPoints(s: Series): Point[] {
-  if (s.frequency === 'daily') return s.points.slice(-30)
-  if (s.frequency === 'monthly') return s.points.slice(-12)
-  return windowed(s, '1Y')
+/** The indicators a chip and a search box leave on the page. 'all' keeps every group. */
+export function filterSeries(series: Series[], group: string, query: string): Series[] {
+  const q = query.trim().toLowerCase()
+  return series.filter((s) => (group === 'all' || s.group === group) &&
+    (q === '' || `${s.name.th} ${s.name.en} ${s.sub.th} ${s.sub.en} ${s.id}`.toLowerCase().includes(q)))
 }
 
 export function rangeChange(s: Series, pts: Point[]): Change {
@@ -76,7 +77,8 @@ export function geometry(pts: Point[], w: number, h: number, pad: number, steppe
   const hi = Math.max(...values)
   const k = hi - lo || 1
   const x = (d: string) => pad + ((time(d) - t0) / span) * (w - 2 * pad)
-  const y = (v: number) => pad + (h - 2 * pad) * (1 - (v - lo) / k)
+  // A series that never moved has no scale, so its line runs through the middle instead of the floor.
+  const y = (v: number) => pad + (h - 2 * pad) * (hi === lo ? 0.5 : 1 - (v - lo) / k)
   const xy: [number, number][] = []
   pts.forEach(([d, v], i) => {
     if (stepped && i > 0) xy.push([x(d), y(pts[i - 1]![1])])

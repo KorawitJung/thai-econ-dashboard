@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Point, Series } from './data'
 import { DataError, parseDashboard } from './data'
-import { coversRange, direction, formatChange, geometry, latestChange, windowed } from './derive'
+import { coversRange, direction, filterSeries, formatChange, geometry, latestChange, windowed } from './derive'
 
 const base = { group: 'fx', name: { th: 'ก', en: 'A' }, sub: { th: 'ข', en: 'B' }, source: { th: 'ค', en: 'C' }, decimals: 2 }
 const mk = (over: Partial<Series> & { points: Point[] }): Series =>
@@ -73,6 +73,11 @@ describe('coversRange', () => {
 })
 
 describe('geometry', () => {
+  it('draws a series that never moved through the middle of the box, not along its floor', () => {
+    const g = geometry([['2026-01-01', 1], ['2026-06-01', 1]], 100, 50, 0, false)
+    expect(g.line).toBe('0.0,25.0 100.0,25.0')
+  })
+
   it('places points by date, so a gap in time is a gap on the chart', () => {
     const g = geometry([['2026-01-01', 1], ['2026-01-02', 2], ['2026-01-11', 3]], 100, 50, 0, false)
     const xs = g.line.split(' ').map((p) => Number(p.split(',')[0]))
@@ -80,10 +85,42 @@ describe('geometry', () => {
   })
 })
 
+describe('filterSeries', () => {
+  const all = [
+    mk({ id: 'usd_thb', name: { th: 'ดอลลาร์สหรัฐ', en: 'US dollar' }, sub: { th: 'USD/THB · รายวัน', en: 'USD/THB · daily' }, points: [['2026-11-24', 32.7], ['2026-11-25', 32.74]] }),
+    mk({ id: 'exports', group: 'ext', name: { th: 'มูลค่าส่งออก', en: 'Exports' }, sub: { th: 'พันล้านดอลลาร์ · รายเดือน', en: 'USD bn · monthly' }, points: [['2026-10-01', 27], ['2026-11-01', 28]] }),
+  ]
+  const ids = (group: string, query: string) => filterSeries(all, group, query).map((s) => s.id)
+
+  it('keeps every group under "all" and only one group under a chip', () => {
+    expect(ids('all', '')).toEqual(['usd_thb', 'exports'])
+    expect(ids('ext', '')).toEqual(['exports'])
+  })
+
+  it('matches the Thai and the English name whichever language the page is in', () => {
+    expect(ids('all', 'ส่งออก')).toEqual(['exports'])
+    expect(ids('all', 'dollar')).toEqual(['usd_thb'])
+  })
+
+  it('matches the sub text and ignores case and surrounding spaces', () => {
+    expect(ids('all', '  USD BN ')).toEqual(['exports'])
+    expect(ids('all', 'รายวัน')).toEqual(['usd_thb'])
+  })
+
+  it('narrows a chip further rather than widening it', () => {
+    expect(ids('ext', 'dollar')).toEqual([])
+  })
+
+  it('finds nothing when nothing matches', () => {
+    expect(ids('all', 'เงินเฟ้อ')).toEqual([])
+  })
+})
+
 describe('parseDashboard', () => {
   const good = {
     generated: '2026-11-25T18:00:00+07:00', source: 'live',
     groups: [{ id: 'fx', name: { th: 'ค่าเงิน', en: 'FX' } }],
+    summary: [{ group: 'fx', th: 'ค่าเงินบาทแข็งค่า', en: 'The baht strengthened' }],
     series: [{ id: 'usd_thb', ...base, unit: '', frequency: 'daily', change: 'pct', points: [['2026-11-24', 32.7], ['2026-11-25', 32.74]] }],
   }
 
@@ -122,6 +159,25 @@ describe('parseDashboard', () => {
     const bad = { ...good, series: [{ ...good.series[0]!, change: 'pp' }] }
     expect(() => parseDashboard(bad)).toThrow(new DataError('data.series[0].change "pp" is unknown'))
   })
+
+  it('keeps the summary line of each group in both languages', () => {
+    expect(parseDashboard(good).summary).toEqual([{ group: 'fx', th: 'ค่าเงินบาทแข็งค่า', en: 'The baht strengthened' }])
+  })
+
+  it('rejects a summary line for a group that is not in groups', () => {
+    const bad = { ...good, summary: [{ group: 'crypto', th: 'ก', en: 'A' }] }
+    expect(() => parseDashboard(bad)).toThrow(new DataError('data.summary[0].group "crypto" is not in groups'))
+  })
+
+  it('rejects a summary line that is missing a language', () => {
+    const bad = { ...good, summary: [{ group: 'fx', th: 'ก' }] }
+    expect(() => parseDashboard(bad)).toThrow(new DataError('data.summary[0].en is not a string'))
+  })
+
+  it('rejects a file with no summary at all', () => {
+    const { summary: _, ...bad } = good
+    expect(() => parseDashboard(bad)).toThrow(new DataError('data.summary is not a list'))
+  })
 })
 
 describe('parseDashboard source', () => {
@@ -129,6 +185,7 @@ describe('parseDashboard source', () => {
     const bad = {
       generated: '2026-11-25T18:00:00+07:00', source: 'live',
       groups: [{ id: 'fx', name: { th: 'ค่าเงิน', en: 'FX' } }],
+      summary: [],
       series: [{ id: 'usd_thb', group: 'fx', name: { th: 'ก', en: 'A' }, sub: { th: 'ข', en: 'B' }, decimals: 2, unit: '', frequency: 'daily', change: 'pct', points: [['2026-11-24', 1], ['2026-11-25', 2]] }],
     }
     expect(() => parseDashboard(bad)).toThrow(new DataError('data.series[0].source is not an object'))
