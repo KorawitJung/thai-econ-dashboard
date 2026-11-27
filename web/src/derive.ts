@@ -51,6 +51,13 @@ export function coversRange(s: Series, pts: Point[], range: Range): boolean {
   return time(pts[0]![0]) - time(shift(last(s)[0], RANGES[range])) <= SLACK_DAYS[s.frequency] * DAY
 }
 
+/** The indicators a chip and a search box leave on the page. 'all' keeps every group. */
+export function filterSeries(series: Series[], group: string, query: string): Series[] {
+  const q = query.trim().toLowerCase()
+  return series.filter((s) => (group === 'all' || s.group === group) &&
+    (q === '' || `${s.name.th} ${s.name.en} ${s.sub.th} ${s.sub.en} ${s.id}`.toLowerCase().includes(q)))
+}
+
 export function sparkPoints(s: Series): Point[] {
   if (s.frequency === 'daily') return s.points.slice(-30)
   if (s.frequency === 'monthly') return s.points.slice(-12)

@@ -17,6 +17,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent))
 import sample_data  # noqa: E402
+import summary  # noqa: E402
 from series import GROUPS, MONTHLY_MAX_AGE, SERIES, Series  # noqa: E402
 from bot_api import Meeting  # noqa: E402
 from sources import SourceError  # noqa: E402
@@ -98,10 +99,15 @@ def build(sample: bool, today: date) -> dict:
             m = sample_data.meeting(df) if sample else fetch_meeting(s)
             entry["meeting"] = {"date": m.day.isoformat(), "decision": {"th": m.decision_th, "en": m.decision_en}}
         out.append(entry)
+    try:
+        overview = summary.lines([g.id for g in GROUPS], out)
+    except summary.SummaryError as e:
+        sys.exit(f"Could not write the summary: {e}. Nothing was written.")
     return {
         "generated": datetime.now(BANGKOK).isoformat(timespec="seconds"),
         "source": "sample" if sample else "live",
         "groups": [{"id": g.id, "name": vars(g.name)} for g in GROUPS],
+        "summary": overview,
         "series": out,
     }
 

@@ -31,10 +31,18 @@ export interface Group {
   name: Text
 }
 
+/** One sentence about a group, written by the build in both languages. */
+export interface SummaryLine {
+  group: string
+  th: string
+  en: string
+}
+
 export interface Dashboard {
   generated: string
   source: 'live' | 'sample'
   groups: Group[]
+  summary: SummaryLine[]
   series: Series[]
 }
 
@@ -106,6 +114,13 @@ function series(x: unknown, at: string, groupIds: Set<string>): Series {
   }
 }
 
+function summaryLine(x: unknown, at: string, groupIds: Set<string>): SummaryLine {
+  const o = obj(x, at)
+  const group = str(o, 'group', at)
+  if (!groupIds.has(group)) throw new DataError(`${at}.group "${group}" is not in groups`)
+  return { group, th: str(o, 'th', at), en: str(o, 'en', at) }
+}
+
 export function parseDashboard(x: unknown): Dashboard {
   const o = obj(x, 'data')
   const source = str(o, 'source', 'data')
@@ -120,6 +135,7 @@ export function parseDashboard(x: unknown): Dashboard {
     generated: str(o, 'generated', 'data'),
     source,
     groups,
+    summary: list(o, 'summary', 'data').map((s, i) => summaryLine(s, `data.summary[${i}]`, groupIds)),
     series: list(o, 'series', 'data').map((s, i) => series(s, `data.series[${i}]`, groupIds)),
   }
 }

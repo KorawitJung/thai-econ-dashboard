@@ -52,6 +52,23 @@ def test_sample_writes_every_series_in_the_shape_the_app_reads(tmp_path):
         assert s["change"] in {"pct", "diff"}
 
 
+def test_sample_writes_one_summary_line_per_group(tmp_path):
+    out = tmp_path / "dashboard.json"
+    build_data.main(["--sample", "--out", str(out)])
+    data = json.loads(out.read_text(encoding="utf-8"))
+    assert [s["group"] for s in data["summary"]] == [g.id for g in series.GROUPS]
+    for s in data["summary"]:
+        assert s["th"] and s["en"], f"{s['group']} has a line in both languages"
+
+
+def test_a_summary_line_that_cannot_be_written_writes_nothing(tmp_path, monkeypatch):
+    monkeypatch.setattr(build_data, "SERIES", [s for s in series.SERIES if s.id != "usd_thb"])
+    out = tmp_path / "dashboard.json"
+    with pytest.raises(SystemExit, match="Could not write the summary: .*no usd_thb series"):
+        build_data.main(["--sample", "--out", str(out)])
+    assert not out.exists()
+
+
 def test_a_failing_source_writes_nothing(tmp_path, monkeypatch):
     def down(start, end):
         raise SourceError("HTTP 503")
